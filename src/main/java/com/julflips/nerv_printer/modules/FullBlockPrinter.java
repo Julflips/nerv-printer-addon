@@ -350,7 +350,7 @@ public class FullBlockPrinter extends Module {
     ArrayList<BlockPos> checkedChests;
     ArrayList<Pair<Vec3d, Pair<String, BlockPos>>> checkpoints;    //(GoalPos, (checkpointAction, targetBlock))
     ArrayList<File> startedFiles;
-    ArrayList<ClickSlotC2SPacket> invActionPackets;
+    ArrayList<Integer> restockBacklogSlots;
     Block[][] map;
     File mapFolder;
     File mapFile;
@@ -372,7 +372,7 @@ public class FullBlockPrinter extends Module {
         checkedChests = new ArrayList<>();
         checkpoints = new ArrayList<>();
         startedFiles = new ArrayList<>();
-        invActionPackets = new ArrayList<>();
+        restockBacklogSlots = new ArrayList<>();
         northReset = null;
         southReset = null;
         mapCorner = null;
@@ -654,8 +654,8 @@ public class FullBlockPrinter extends Module {
             //info("Chest content received.");
             Item foundItem = null;
             boolean isMixedContent = false;
-            for (int i = 0; i < packet.getContents().size() - 36; i++) {
-                ItemStack stack = packet.getContents().get(i);
+            for (int i = 0; i < packet.contents().size() - 36; i++) {
+                ItemStack stack = packet.contents().get(i);
                 if (!stack.isEmpty()) {
                     if (foundItem != null && foundItem != stack.getItem().asItem()) {
                         isMixedContent = true;
@@ -703,8 +703,8 @@ public class FullBlockPrinter extends Module {
             case AwaitRestockResponse:
                 interactTimeout = 0;
                 boolean foundMaterials = false;
-                for (int i = 0; i < packet.getContents().size() - 36; i++) {
-                    ItemStack stack = packet.getContents().get(i);
+                for (int i = 0; i < packet.contents().size() - 36; i++) {
+                    ItemStack stack = packet.contents().get(i);
 
                     if (restockList.get(0).getMiddle() == 0) {
                         foundMaterials = true;
@@ -720,7 +720,7 @@ public class FullBlockPrinter extends Module {
                             state = State.Walking;
                             return;
                         }
-                        invActionPackets.add(new ClickSlotC2SPacket(packet.getSyncId(), 1, i, 1, SlotActionType.QUICK_MOVE, new ItemStack(Items.AIR), Int2ObjectMaps.emptyMap()));
+                        restockBacklogSlots.add(i);
                         Triple<Block, Integer, Integer> oldTriple = restockList.remove(0);
                         restockList.add(0, Triple.of(oldTriple.getLeft(), oldTriple.getMiddle() - 1, oldTriple.getRight() - 64));
                     }
@@ -731,8 +731,8 @@ public class FullBlockPrinter extends Module {
                 int mapSlot = -1;
                 int paneSlot = -1;
                 //Search for map and glass pane
-                for (int slot = 0; slot < packet.getContents().size() - 36; slot++) {
-                    ItemStack stack = packet.getContents().get(slot);
+                for (int slot = 0; slot < packet.contents().size() - 36; slot++) {
+                    ItemStack stack = packet.contents().get(slot);
                     if (stack.getItem() == Items.MAP) mapSlot = slot;
                     if (stack.getItem() == Items.GLASS_PANE) paneSlot = slot;
                 }
@@ -744,7 +744,7 @@ public class FullBlockPrinter extends Module {
                 timeoutTicks = postRestockDelay.get();
                 Utils.getOneItem(mapSlot, false, availableSlots, availableHotBarSlots, packet);
                 Utils.getOneItem(paneSlot, true, availableSlots, availableHotBarSlots, packet);
-                mc.player.getInventory().selectedSlot = availableHotBarSlots.get(0);
+                mc.player.getInventory().setSelectedSlot(availableHotBarSlots.get(0));
 
                 Vec3d center = mapCorner.add(map.length / 2 - 1, 0, map[0].length / 2 - 1).toCenterPos();
                 checkpoints.add(new Pair(center, new Pair("fillMap", null)));
@@ -760,9 +760,9 @@ public class FullBlockPrinter extends Module {
                     } else {
                         slot -= 6;
                     }
-                    ItemStack stack = packet.getContents().get(slot);
+                    ItemStack stack = packet.contents().get(slot);
                     if (searchingMap && stack.getItem() == Items.FILLED_MAP) {
-                        mc.getNetworkHandler().sendPacket(new ClickSlotC2SPacket(packet.getSyncId(), 1, slot, 0, SlotActionType.QUICK_MOVE, new ItemStack(Items.AIR), Int2ObjectMaps.emptyMap()));
+                        mc.interactionManager.clickSlot(packet.syncId(), slot, 0, SlotActionType.QUICK_MOVE, mc.player);
                         searchingMap = false;
                     }
                 }
@@ -772,23 +772,23 @@ public class FullBlockPrinter extends Module {
                     } else {
                         slot -= 6;
                     }
-                    ItemStack stack = packet.getContents().get(slot);
+                    ItemStack stack = packet.contents().get(slot);
                     if (!searchingMap && stack.getItem() == Items.GLASS_PANE) {
-                        mc.getNetworkHandler().sendPacket(new ClickSlotC2SPacket(packet.getSyncId(), 1, slot, 0, SlotActionType.QUICK_MOVE, new ItemStack(Items.AIR), Int2ObjectMaps.emptyMap()));
+                        mc.interactionManager.clickSlot(packet.syncId(), slot, 0, SlotActionType.QUICK_MOVE, mc.player);
                         break;
                     }
                 }
-                mc.getNetworkHandler().sendPacket(new ClickSlotC2SPacket(packet.getSyncId(), 1, 2, 0, SlotActionType.QUICK_MOVE, new ItemStack(Items.AIR), Int2ObjectMaps.emptyMap()));
+                mc.interactionManager.clickSlot(packet.syncId(), 2, 0, SlotActionType.QUICK_MOVE, mc.player);
                 checkpoints.add(new Pair(finishedMapChest.getRight(), new Pair("finishedMapChest", null)));
                 state = State.Walking;
                 break;
             case AwaitFinishedMapChestResponse:
                 interactTimeout = 0;
                 timeoutTicks = postRestockDelay.get();
-                for (int slot = packet.getContents().size() - 36; slot < packet.getContents().size(); slot++) {
-                    ItemStack stack = packet.getContents().get(slot);
+                for (int slot = packet.contents().size() - 36; slot < packet.contents().size(); slot++) {
+                    ItemStack stack = packet.contents().get(slot);
                     if (stack.getItem() == Items.FILLED_MAP) {
-                        mc.getNetworkHandler().sendPacket(new ClickSlotC2SPacket(packet.getSyncId(), 1, slot, 0, SlotActionType.QUICK_MOVE, new ItemStack(Items.AIR), Int2ObjectMaps.emptyMap()));
+                        mc.interactionManager.clickSlot(packet.syncId(), slot, 0, SlotActionType.QUICK_MOVE, mc.player);
                         break;
                     }
                 }
@@ -888,10 +888,10 @@ public class FullBlockPrinter extends Module {
             return;
         }
 
-        if (invActionPackets.size() > 0) {
-            mc.getNetworkHandler().sendPacket(invActionPackets.get(0));
-            invActionPackets.remove(0);
-            if (invActionPackets.size() == 0) {
+        if (restockBacklogSlots.size() > 0) {
+            int slot = restockBacklogSlots.remove(0);
+            mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot, 1, SlotActionType.QUICK_MOVE, mc.player);
+            if (restockBacklogSlots.size() == 0) {
                 if (state.equals(State.AwaitRestockResponse)) {
                     endRestocking();
                 }
