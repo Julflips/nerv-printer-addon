@@ -2,7 +2,6 @@ package com.julflips.nerv_printer.modules;
 
 import com.julflips.nerv_printer.Addon;
 import com.julflips.nerv_printer.utils.Utils;
-import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
