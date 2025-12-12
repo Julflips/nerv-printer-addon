@@ -26,7 +26,7 @@ public class MapAreaCache {
     public static boolean isMapAreaClear() {
         for (int x = 0; x < 128; x++) {
             for (int z = 0; z < 128; z++) {
-                BlockState blockState = getCachedBlockState(mapCorner.add(x, 0, z));
+                BlockState blockState = mc.world.getBlockState(mapCorner.add(x, 0, z));
                 if (!blockState.isAir() || !blockState.getFluidState().isEmpty()) return false;
             }
         }
