@@ -26,6 +26,7 @@ import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.network.packet.c2s.play.*;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Hand;
@@ -46,6 +47,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class FullBlockPrinter extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgAdvanced = settings.createGroup("Advanced",  false);
     private final SettingGroup sgError = settings.createGroup("Error Handling");
     private final SettingGroup sgRender = settings.createGroup("Render");
 
@@ -55,15 +57,6 @@ public class FullBlockPrinter extends Module {
         .defaultValue(3)
         .min(1)
         .sliderRange(1, 5)
-        .build()
-    );
-
-    private final Setting<Double> checkpointBuffer = sgGeneral.add(new DoubleSetting.Builder()
-        .name("checkpoint-buffer")
-        .description("The buffer area of the checkpoints. Larger means less precise walking, but might be desired at higher speeds.")
-        .defaultValue(0.2)
-        .min(0)
-        .sliderRange(0, 1)
         .build()
     );
 
@@ -103,42 +96,6 @@ public class FullBlockPrinter extends Module {
         .build()
     );
 
-    private final Setting<Integer> preRestockDelay = sgGeneral.add(new IntSetting.Builder()
-        .name("pre-restock-delay")
-        .description("How many ticks to wait to take items after opening the chest.")
-        .defaultValue(20)
-        .min(1)
-        .sliderRange(1, 40)
-        .build()
-    );
-
-    private final Setting<Integer> invActionDelay = sgGeneral.add(new IntSetting.Builder()
-        .name("inventory-action-delay")
-        .description("How many ticks to wait between each inventory action (moving a stack).")
-        .defaultValue(2)
-        .min(1)
-        .sliderRange(1, 40)
-        .build()
-    );
-
-    private final Setting<Integer> postRestockDelay = sgGeneral.add(new IntSetting.Builder()
-        .name("post-restock-delay")
-        .description("How many ticks to wait after restocking.")
-        .defaultValue(20)
-        .min(1)
-        .sliderRange(1, 40)
-        .build()
-    );
-
-    private final Setting<Integer> swapDelay = sgGeneral.add(new IntSetting.Builder()
-        .name("swap-delay")
-        .description("How many ticks to wait before swapping into hotbar.")
-        .defaultValue(2)
-        .min(0)
-        .sliderRange(0, 20)
-        .build()
-    );
-
     private final Setting<Integer> resetDelay = sgGeneral.add(new IntSetting.Builder()
         .name("reset-delay")
         .description("How many ticks to wait after after reset button was pressed.")
@@ -154,24 +111,6 @@ public class FullBlockPrinter extends Module {
         .defaultValue(10)
         .min(1)
         .sliderRange(1, 30)
-        .build()
-    );
-
-    private final Setting<Integer> resetChestCloseDelay = sgGeneral.add(new IntSetting.Builder()
-        .name("reset-chest-close-delay")
-        .description("How many ticks to wait before closing the reset trap chest again.")
-        .defaultValue(10)
-        .min(1)
-        .sliderRange(1, 40)
-        .build()
-    );
-
-    private final Setting<Integer> retryInteractTimer = sgGeneral.add(new IntSetting.Builder()
-        .name("retry-interact-timer")
-        .description("How many ticks to wait for chest response before interacting with it again.")
-        .defaultValue(80)
-        .min(1)
-        .sliderRange(20, 200)
         .build()
     );
 
@@ -203,13 +142,6 @@ public class FullBlockPrinter extends Module {
         .build()
     );
 
-    private final Setting<Boolean> moveToFinishedFolder = sgGeneral.add(new BoolSetting.Builder()
-        .name("move-to-finished-folder")
-        .description("Moves finished NBT files into the finished-maps folder in the nerv-printer folder.")
-        .defaultValue(true)
-        .build()
-    );
-
     private final Setting<Boolean> customFolderPath = sgGeneral.add(new BoolSetting.Builder()
         .name("custom-folder-path")
         .description("Allows to set a custom path to the nbt folder.")
@@ -227,21 +159,111 @@ public class FullBlockPrinter extends Module {
         .build()
     );
 
-    private final Setting<Boolean> disableOnFinished = sgGeneral.add(new BoolSetting.Builder()
+    //Advanced
+
+    private final Setting<Integer> preRestockDelay = sgAdvanced.add(new IntSetting.Builder()
+        .name("pre-restock-delay")
+        .description("How many ticks to wait to take items after opening the chest.")
+        .defaultValue(10)
+        .min(1)
+        .sliderRange(1, 40)
+        .build()
+    );
+
+    private final Setting<Integer> invActionDelay = sgAdvanced.add(new IntSetting.Builder()
+        .name("inventory-action-delay")
+        .description("How many ticks to wait between each inventory action (moving a stack).")
+        .defaultValue(2)
+        .min(1)
+        .sliderRange(1, 40)
+        .build()
+    );
+
+    private final Setting<Integer> postRestockDelay = sgAdvanced.add(new IntSetting.Builder()
+        .name("post-restock-delay")
+        .description("How many ticks to wait after restocking.")
+        .defaultValue(10)
+        .min(1)
+        .sliderRange(1, 40)
+        .build()
+    );
+
+    private final Setting<Integer> preSwapDelay = sgAdvanced.add(new IntSetting.Builder()
+        .name("pre-swap-delay")
+        .description("How many ticks to wait before swapping an item into the hotbar.")
+        .defaultValue(5)
+        .min(0)
+        .sliderRange(0, 20)
+        .build()
+    );
+
+    private final Setting<Integer> postSwapDelay = sgAdvanced.add(new IntSetting.Builder()
+        .name("post-swap-delay")
+        .description("How many ticks to wait after swapping an item into the hotbar.")
+        .defaultValue(5)
+        .min(0)
+        .sliderRange(0, 20)
+        .build()
+    );
+
+    private final Setting<Integer> resetChestCloseDelay = sgAdvanced.add(new IntSetting.Builder()
+        .name("reset-chest-close-delay")
+        .description("How many ticks to wait before closing the reset trap chest again.")
+        .defaultValue(10)
+        .min(1)
+        .sliderRange(1, 40)
+        .build()
+    );
+
+    private final Setting<Integer> retryInteractTimer = sgAdvanced.add(new IntSetting.Builder()
+        .name("retry-interact-timer")
+        .description("How many ticks to wait for chest response before interacting with it again.")
+        .defaultValue(80)
+        .min(1)
+        .sliderRange(20, 200)
+        .build()
+    );
+
+    private final Setting<Integer> posResetTimeout = sgAdvanced.add(new IntSetting.Builder()
+        .name("pos-reset-timeout")
+        .description("How many ticks to wait after the player position was reset by the server.")
+        .defaultValue(10)
+        .min(0)
+        .sliderRange(0, 40)
+        .build()
+    );
+
+    private final Setting<Double> checkpointBuffer = sgAdvanced.add(new DoubleSetting.Builder()
+        .name("checkpoint-buffer")
+        .description("The buffer area of the checkpoints. Larger means less precise walking, but might be desired at higher speeds.")
+        .defaultValue(0.2)
+        .min(0)
+        .sliderRange(0, 1)
+        .build()
+    );
+
+    private final Setting<Boolean> moveToFinishedFolder = sgAdvanced.add(new BoolSetting.Builder()
+        .name("move-to-finished-folder")
+        .description("Moves finished NBT files into the finished-maps folder in the nerv-printer folder.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> disableOnFinished = sgAdvanced.add(new BoolSetting.Builder()
         .name("disable-on-finished")
         .description("Disables the printer when all nbt files are finished.")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Boolean> displayMaxRequirements = sgGeneral.add(new BoolSetting.Builder()
+    private final Setting<Boolean> displayMaxRequirements = sgAdvanced.add(new BoolSetting.Builder()
         .name("print-max-requirements")
         .description("Print the maximum amount of material needed for all maps in the map-folder.")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Boolean> debugPrints = sgGeneral.add(new BoolSetting.Builder()
+    private final Setting<Boolean> debugPrints = sgAdvanced.add(new BoolSetting.Builder()
         .name("debug-prints")
         .description("Prints additional information.")
         .defaultValue(false)
@@ -325,6 +347,7 @@ public class FullBlockPrinter extends Module {
     int timeoutTicks;
     int closeResetChestTicks;
     int interactTimeout;
+    int toBeSwappedSlot;
     long lastTickTime;
     boolean closeNextInvPacket;
     boolean atEdge;
@@ -389,6 +412,7 @@ public class FullBlockPrinter extends Module {
         timeoutTicks = 0;
         interactTimeout = 0;
         closeResetChestTicks = 0;
+        toBeSwappedSlot = -1;
 
         if (!customFolderPath.get()) {
             mapFolder = new File(Utils.getMinecraftDirectory(), "nerv-printer");
@@ -650,7 +674,14 @@ public class FullBlockPrinter extends Module {
 
     @EventHandler
     private void onReceivePacket(PacketEvent.Receive event) {
-        if (!(event.packet instanceof InventoryS2CPacket packet) || state == null) return;
+        if (state == null) return;
+
+        if (event.packet instanceof PlayerPositionLookS2CPacket) {
+            timeoutTicks = posResetTimeout.get();
+        }
+
+        if (!(event.packet instanceof InventoryS2CPacket packet)) return;
+
         if (state.equals(State.AwaitContent)) {
             //info("Chest content received.");
             Item foundItem = null;
@@ -889,6 +920,17 @@ public class FullBlockPrinter extends Module {
             return;
         }
 
+        // Swap into Hotbar
+        if (toBeSwappedSlot != -1) {
+            Utils.swapIntoHotbar(toBeSwappedSlot, availableHotBarSlots);
+            toBeSwappedSlot = -1;
+            if (postSwapDelay.get() != 0) {
+                timeoutTicks = postSwapDelay.get();
+                return;
+            }
+        }
+
+        // Restocking
         if (restockBacklogSlots.size() > 0) {
             int slot = restockBacklogSlots.remove(0);
             mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot, 1, SlotActionType.QUICK_MOVE, mc.player);
@@ -902,6 +944,7 @@ public class FullBlockPrinter extends Module {
             return;
         }
 
+        // Dump unnecessary items
         if (state == State.Dumping) {
             int dumpSlot = getDumpSlot();
             if (dumpSlot == -1) {
@@ -934,6 +977,7 @@ public class FullBlockPrinter extends Module {
             return;
         }
 
+        // Load next nbt file
         if (state == State.AwaitNBTFile) {
             if (!prepareNextMapFile()) return;
             info("Building: §a" + mapFile.getName());
@@ -945,6 +989,7 @@ public class FullBlockPrinter extends Module {
             state = State.Walking;
         }
 
+        // Handle Block Entity interaction response
         if (toBeHandledInvPacket != null) {
             handleInventoryPacket(toBeHandledInvPacket);
             toBeHandledInvPacket = null;
@@ -952,13 +997,13 @@ public class FullBlockPrinter extends Module {
         }
 
         if (closeNextInvPacket) {
-            //info("Closing Inventory");
             if (mc.currentScreen != null) {
                 mc.player.closeHandledScreen();
             }
             closeNextInvPacket = false;
         }
 
+        // Main Loop for building
         if (!state.equals(State.Walking)) return;
         if (!atEdge) Utils.setWPressed(true);
         if (checkpoints.isEmpty()) {
@@ -1127,11 +1172,10 @@ public class FullBlockPrinter extends Module {
             Block foundMaterial = Registries.BLOCK.get(Identifier.of(mc.player.getInventory().getStack(slot).getItem().toString()));
             if (foundMaterial.equals(material)) {
                 lastSwappedMaterial = material;
-                Utils.swapIntoHotbar(slot, availableHotBarSlots);
-                //BlockUtils.place(pos, Hand.MAIN_HAND, resultSlot, true,50, true, true, false);
+                toBeSwappedSlot = slot;
                 Utils.setWPressed(false);
                 mc.player.setVelocity(0, 0, 0);
-                timeoutTicks = swapDelay.get();
+                timeoutTicks = preSwapDelay.get();
                 return false;
             }
         }
