@@ -60,25 +60,25 @@ public class Utils {
         return stacks;
     }
 
-    public static ArrayList<Integer> getAvailableSlots(HashMap<Block, ArrayList<Pair<BlockPos, Vec3d>>> materials) {
+    public static ArrayList<Integer> getAvailableSlots(HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materials) {
         ArrayList<Integer> slots = new ArrayList<>();
         for (int slot = 0; slot < 36; slot++) {
             if (mc.player.getInventory().getStack(slot).isEmpty()) {
                 slots.add(slot);
                 continue;
             }
-            Block material = Registries.BLOCK.get(Identifier.of(mc.player.getInventory().getStack(slot).getItem().toString()));
-            if (materials.containsKey(material)) {
+            Item item = mc.player.getInventory().getStack(slot).getItem();
+            if (materials.containsKey(item)) {
                 slots.add(slot);
             }
         }
         return slots;
     }
 
-    public static HashMap<Block, Integer> getRequiredItems(BlockPos mapCorner, int linesPerRun, int availableSlotsSize, Block[][] map) {
+    public static HashMap<Item, Integer> getRequiredItems(BlockPos mapCorner, int linesPerRun, int availableSlotsSize, Block[][] map) {
         //Calculate the next items to restock
         //Iterate over map. Player has to be able to see the complete map area
-        HashMap<Block, Integer> requiredItems = new HashMap<>();
+        HashMap<Item, Integer> requiredItems = new HashMap<>();
         boolean isStartSide = true;
         for (int x = 0; x < 128; x += linesPerRun) {
             for (int z = 0; z < 128; z++) {
@@ -89,7 +89,7 @@ public class Utils {
                     BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(x + lineBonus, 0, adjustedZ));
                     if (blockState.isAir() && map[x + lineBonus][adjustedZ] != null) {
                         //ChatUtils.info("Add material for: " + mapCorner.add(x + lineBonus, 0, adjustedZ).toShortString());
-                        Block material = map[x + lineBonus][adjustedZ];
+                        Item material = map[x + lineBonus][adjustedZ].asItem();
                         if (!requiredItems.containsKey(material)) requiredItems.put(material, 0);
                         requiredItems.put(material, requiredItems.get(material) + 1);
                         //Check if the item fits into inventory. If not, undo the last increment and return
@@ -105,27 +105,27 @@ public class Utils {
         return requiredItems;
     }
 
-    public static Pair<ArrayList<Integer>, HashMap<Block, Integer>> getInvInformation(HashMap<Block, Integer> requiredItems, ArrayList<Integer> availableSlots) {
+    public static Pair<ArrayList<Integer>, HashMap<Item, Integer>> getInvInformation(HashMap<Item, Integer> requiredItems, ArrayList<Integer> availableSlots) {
         //Return a list of slots to be dumped and a Hashmap of material-amount we can keep in the inventory
         ArrayList<Integer> dumpSlots = new ArrayList<>();
-        HashMap<Block, Integer> materialInInv = new HashMap<>();
+        HashMap<Item, Integer> materialInInv = new HashMap<>();
         for (int slot : availableSlots) {
             if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
-            Block material = Registries.BLOCK.get(Identifier.of(mc.player.getInventory().getStack(slot).getItem().toString()));
-            if (requiredItems.containsKey(material)) {
-                int requiredAmount = requiredItems.get(material);
+            Item item = mc.player.getInventory().getStack(slot).getItem();
+            if (requiredItems.containsKey(item)) {
+                int requiredAmount = requiredItems.get(item);
                 int requiredModulusAmount = (requiredAmount - (requiredAmount / 64) * 64);
                 if (requiredModulusAmount == 0) requiredModulusAmount = 64;
                 int stackAmount = mc.player.getInventory().getStack(slot).getCount();
                 // ChatUtils.info(material.getName().getString() + " | Required: " + requiredModulusAmount + " | Inv: " + stackAmount);
                 if (requiredAmount > 0 && requiredModulusAmount <= stackAmount) {
-                    int oldEntry = requiredItems.remove(material);
-                    requiredItems.put(material, Math.max(0, oldEntry - stackAmount));
-                    if (materialInInv.containsKey(material)) {
-                        oldEntry = materialInInv.remove(material);
-                        materialInInv.put(material, oldEntry + stackAmount);
+                    int oldEntry = requiredItems.remove(item);
+                    requiredItems.put(item, Math.max(0, oldEntry - stackAmount));
+                    if (materialInInv.containsKey(item)) {
+                        oldEntry = materialInInv.remove(item);
+                        materialInInv.put(item, oldEntry + stackAmount);
                     } else {
-                        materialInInv.put(material, stackAmount);
+                        materialInInv.put(item, stackAmount);
                     }
                     continue;
                 }
@@ -139,21 +139,26 @@ public class Utils {
         return FabricLoader.getInstance().getGameDir().toFile();
     }
 
-    public static boolean createMapFolder(File mapFolder) {
+    public static boolean createFolders(File mapFolder) {
         File finishedMapFolder = new File(mapFolder.getAbsolutePath() + File.separator + "_finished_maps");
+        File configFolder = new File(mapFolder.getAbsolutePath() + File.separator + "_configs");
         if (!mapFolder.exists()) {
-            boolean created = mapFolder.mkdir();
-            if (created) {
-                ChatUtils.info("Created nerv-printer folder in Minecraft directory");
+            if (mapFolder.mkdir()) {
+                ChatUtils.info("Created nerv-printer folder in the Minecraft directory.");
             } else {
-                ChatUtils.warning("Failed to create nerv-printer folder in Minecraft directory. Try to disable autoFolderDetection and manually enter a path.");
+                ChatUtils.warning("Failed to create nerv-printer folder in the Minecraft directory. Try to enable customFolderPath and enter a path.");
                 return false;
             }
         }
         if (!finishedMapFolder.exists()) {
-            boolean created = finishedMapFolder.mkdir();
-            if (!created) {
-                ChatUtils.warning("Failed to create Finished-NBT folder in nerv-printer folder");
+            if (!finishedMapFolder.mkdir()) {
+                ChatUtils.warning("Failed to create finished-map folder in the nerv-printer folder");
+                return false;
+            }
+        }
+        if (!configFolder.exists()) {
+            if (configFolder.mkdir()) {
+                ChatUtils.warning("Failed to create config folder in the nerv-printer folder");
                 return false;
             }
         }

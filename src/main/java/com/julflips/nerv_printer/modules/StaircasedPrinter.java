@@ -26,10 +26,8 @@ import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.network.packet.c2s.play.*;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
-import net.minecraft.registry.Registries;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.Pair;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -347,6 +345,7 @@ public class StaircasedPrinter extends Module {
         .visible(() -> render.get())
         .build()
     );
+
     int timeoutTicks;
     int jumpTimeout;
     int interactTimeout;
@@ -364,7 +363,7 @@ public class StaircasedPrinter extends Module {
     BlockPos tempChestPos;
     BlockPos lastInteractedChest;
     BlockPos miningPos;
-    Block lastSwappedMaterial;
+    Item lastSwappedMaterial;
     InventoryS2CPacket toBeHandledInvPacket;
     HashMap<Integer, Pair<Block, Integer>> blockPaletteDict;      //Maps palette block id to the Minecraft block and amount
     HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict; //Maps block to the chest pos and the open position
@@ -420,7 +419,7 @@ public class StaircasedPrinter extends Module {
         } else {
             mapFolder = new File(mapPrinterFolderPath.get());
         }
-        if (!Utils.createMapFolder(mapFolder)) {
+        if (!Utils.createFolders(mapFolder)) {
             toggle();
             return;
         }
@@ -678,7 +677,7 @@ public class StaircasedPrinter extends Module {
                     }
                     Utils.setForwardPressed(true);
                     calculateBuildingPath(true);
-                    availableSlots = getAvailableSlots(materialDict);
+                    availableSlots = Utils.getAvailableSlots(materialDict);
                     for (int slot : availableSlots) {
                         if (slot < 9) {
                             availableHotBarSlots.add(slot);
@@ -687,7 +686,7 @@ public class StaircasedPrinter extends Module {
                     info("Inventory slots available for building: " + availableSlots);
 
                     HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, availableSlots.size(), map);
-                    Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = getInvInformation(requiredItems, availableSlots);
+                    Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
                     if (invInformation.getLeft().size() != 0) {
                         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
                     } else {
@@ -979,7 +978,7 @@ public class StaircasedPrinter extends Module {
             int dumpSlot = getDumpSlot();
             if (dumpSlot == -1) {
                 HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, availableSlots.size(), map);
-                Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = getInvInformation(requiredItems, availableSlots);
+                Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
                 refillBuildingInventory(invInformation.getRight());
                 state = State.Walking;
             } else {
@@ -1177,7 +1176,7 @@ public class StaircasedPrinter extends Module {
 
     private int getDumpSlot() {
         HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, availableSlots.size(), map);
-        Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = getInvInformation(requiredItems, availableSlots);
+        Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
         if (invInformation.getLeft().isEmpty()) {
             return -1;
         }
@@ -1186,12 +1185,12 @@ public class StaircasedPrinter extends Module {
 
     private void tryPlacingBlock(BlockPos pos) {
         BlockPos relativePos = pos.subtract(mapCorner);
-        Block material = map[relativePos.getX()][relativePos.getZ()].getLeft();
+        Item material = map[relativePos.getX()][relativePos.getZ()].getLeft().asItem();
         //info("Placing " + material.getName().getString() + " at: " + relativePos.toShortString());
         //Check hot-bar slots
         for (int slot : availableHotBarSlots) {
             if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
-            Block foundMaterial = Registries.BLOCK.get(Identifier.of(mc.player.getInventory().getStack(slot).getItem().toString()));
+            Item foundMaterial = mc.player.getInventory().getStack(slot).getItem();
             if (foundMaterial.equals(material)) {
                 BlockUtils.place(pos, Hand.MAIN_HAND, slot, rotatePlace.get(), 50, true, true, false);
                 if (material == lastSwappedMaterial) lastSwappedMaterial = null;
@@ -1200,7 +1199,7 @@ public class StaircasedPrinter extends Module {
         }
         for (int slot : availableSlots) {
             if (mc.player.getInventory().getStack(slot).isEmpty() || availableHotBarSlots.contains(slot)) continue;
-            Block foundMaterial = Registries.BLOCK.get(Identifier.of(mc.player.getInventory().getStack(slot).getItem().toString()));
+            Item foundMaterial = mc.player.getInventory().getStack(slot).getItem();
             if (foundMaterial.equals(material)) {
                 lastSwappedMaterial = material;
                 toBeSwappedSlot = slot;
@@ -1533,50 +1532,5 @@ public class StaircasedPrinter extends Module {
     private enum ErrorAction {
         Ignore,
         ToggleOff
-    }
-
-    public ArrayList<Integer> getAvailableSlots(HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materials) {
-        ArrayList<Integer> slots = new ArrayList<>();
-        for (int slot = 0; slot < 36; slot++) {
-            if (mc.player.getInventory().getStack(slot).isEmpty()) {
-                slots.add(slot);
-                continue;
-            }
-            Item item = mc.player.getInventory().getStack(slot).getItem();
-            if (materials.containsKey(item)) {
-                slots.add(slot);
-            }
-        }
-        return slots;
-    }
-
-    public Pair<ArrayList<Integer>, HashMap<Item, Integer>> getInvInformation(HashMap<Item, Integer> requiredItems, ArrayList<Integer> availableSlots) {
-        //Return a list of slots to be dumped and a Hashmap of material-amount we can keep in the inventory
-        ArrayList<Integer> dumpSlots = new ArrayList<>();
-        HashMap<Item, Integer> materialInInv = new HashMap<>();
-        for (int slot : availableSlots) {
-            if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
-            Item item = mc.player.getInventory().getStack(slot).getItem();
-            if (requiredItems.containsKey(item)) {
-                int requiredAmount = requiredItems.get(item);
-                int requiredModulusAmount = (requiredAmount - (requiredAmount / 64) * 64);
-                if (requiredModulusAmount == 0) requiredModulusAmount = 64;
-                int stackAmount = mc.player.getInventory().getStack(slot).getCount();
-                // ChatUtils.info(material.getName().getString() + " | Required: " + requiredModulusAmount + " | Inv: " + stackAmount);
-                if (requiredAmount > 0 && requiredModulusAmount <= stackAmount) {
-                    int oldEntry = requiredItems.remove(item);
-                    requiredItems.put(item, Math.max(0, oldEntry - stackAmount));
-                    if (materialInInv.containsKey(item)) {
-                        oldEntry = materialInInv.remove(item);
-                        materialInInv.put(item, oldEntry + stackAmount);
-                    } else {
-                        materialInInv.put(item, stackAmount);
-                    }
-                    continue;
-                }
-            }
-            dumpSlots.add(slot);
-        }
-        return new Pair(dumpSlots, materialInInv);
     }
 }
