@@ -10,6 +10,8 @@ import meteordevelopment.orbit.EventPriority;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
@@ -75,21 +77,22 @@ public class Utils {
         return slots;
     }
 
-    public static HashMap<Item, Integer> getRequiredItems(BlockPos mapCorner, int linesPerRun, int availableSlotsSize, Block[][] map) {
+    public static HashMap<Item, Integer> getRequiredItems(BlockPos mapCorner, Pair<Integer, Integer> interval, int linesPerRun, int availableSlotsSize, Block[][] map) {
         //Calculate the next items to restock
         //Iterate over map. Player has to be able to see the complete map area
         HashMap<Item, Integer> requiredItems = new HashMap<>();
         boolean isStartSide = true;
-        for (int x = 0; x < 128; x += linesPerRun) {
+        for (int x = interval.getLeft(); x <= interval.getRight(); x += linesPerRun) {
             for (int z = 0; z < 128; z++) {
                 for (int lineBonus = 0; lineBonus < linesPerRun; lineBonus++) {
-                    if (x + lineBonus > 127) break;
+                    int adjustedX = x + lineBonus;
+                    if (adjustedX > interval.getRight()) break;
                     int adjustedZ = z;
                     if (!isStartSide) adjustedZ = 127 - z;
-                    BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(x + lineBonus, 0, adjustedZ));
-                    if (blockState.isAir() && map[x + lineBonus][adjustedZ] != null) {
+                    BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, adjustedZ));
+                    if (blockState.isAir() && map[adjustedX][adjustedZ] != null) {
                         //ChatUtils.info("Add material for: " + mapCorner.add(x + lineBonus, 0, adjustedZ).toShortString());
-                        Item material = map[x + lineBonus][adjustedZ].asItem();
+                        Item material = map[adjustedX][adjustedZ].asItem();
                         if (!requiredItems.containsKey(material)) requiredItems.put(material, 0);
                         requiredItems.put(material, requiredItems.get(material) + 1);
                         //Check if the item fits into inventory. If not, undo the last increment and return
@@ -424,6 +427,41 @@ public class Utils {
             }
         }
         return bestSide;
+    }
+
+    public static ArrayList<String> registerSlaves() {
+        ArrayList<String> foundPlayers = new ArrayList<>();
+        for(Entity entity : mc.world.getEntities()) {
+            if (entity instanceof PlayerEntity player && !mc.player.equals(player)) {
+                foundPlayers.add(player.getName().getString());
+            }
+        }
+        return foundPlayers;
+    }
+
+    public static boolean canSeePlayer(String playerName) {
+        for(Entity entity : mc.world.getEntities()) {
+            if (entity instanceof PlayerEntity player && player.getName().getString().equals(playerName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static ArrayList<Pair<Integer, Integer>> generateIntervals(int lines, int sections) {
+        int sectionSize = (int) Math.ceil((float) lines / (float) sections);
+        ChatUtils.info("SectionSize: " + sectionSize);
+        ArrayList<Pair<Integer, Integer>> sectionList = new ArrayList<>();
+        for (int end = lines-1; end >= 0 ; end -= sectionSize) {
+            int start = Math.max(0, end - sectionSize + 1);
+            sectionList.add(new Pair<>(start, end));
+        }
+        Collections.reverse(sectionList);
+        return sectionList;
+    }
+
+    public static boolean isInInterval(Pair<Integer, Integer> interval, int number) {
+        return number >= interval.getLeft() && number <= interval.getRight();
     }
 
     @EventHandler
