@@ -3,22 +3,22 @@
 
 The Carpet Printer allows you to build 2D carpet mapart from NBT files.
 ## Setup
-To get the program running we first need to build an area where we will build one 1x1 map at a time. An area could look like this:
+To get the program running we first need to build an area where we will build one 1x1 map at a time. It could look like this but could use any other mechanism to clear the carpets:
 ![Setup](MapArea.png)
 
-As you can see we need a restock station to refill the bot inventory. We can build one in the ground of the map area and refill it from below using droppers to minimize the path we need to walk to it. Alternatively, we can build a simpler restock station at the edge of the area as seen here:
+A Restock Station is required to refill the bot inventory. Ideally it is at the north side of the area. All essential components are labeled here:
 ![Setup](RestockStation.png)
 
 Make sure it fulfills the following points:
 - The fluid dispensers and lighting should cover the whole 128x128 MapArea.
 - Avoid having grass blocks on the map area since it can lead to mobs spawning in certain biomes.
-- The restock station should have a DumpStation, FinishedMapChest, MapMaterialChest, Reset Trapped Chest, and Cartography Table. The terms are explained below.
+- The Restock Station should have a DumpStation, FinishedMapChest, MapMaterialChest, Reset Trapped Chest, and Cartography Table. The terms are explained below.
 - Avoid having the bot pick up old carpets while restocking. The simplest way to avoid that is to place the carpet dupers a few blocks away from the Map Area and seperate them using slabs (also avoids "noob line").
 - Make sure the server loads the entire map when resetting
 - If Phantoms are on you need a glass ceiling.
 - If you play on hard difficulty don't forget the regeneration 2 beacons
 
-A litematica file with an example Map Area can be found [here](CarpetPrinter.litematic).
+**A litematica file with an example Map Area can be found [here](CarpetPrinter.litematic).**
 
 ### Special blocks
 Let's go over all the special blocks we need at the restock station.
