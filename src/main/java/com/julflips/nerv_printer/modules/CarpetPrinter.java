@@ -10,7 +10,6 @@ import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.utils.StarscriptTextBoxRenderer;
-import meteordevelopment.meteorclient.gui.widgets.WLabel;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
 import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
@@ -39,6 +38,10 @@ import net.minecraft.network.packet.s2c.play.GameMessageS2CPacket;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Pair;
 import net.minecraft.util.hit.BlockHitResult;
@@ -113,13 +116,6 @@ public class CarpetPrinter extends Module {
         .build()
     );
 
-    private final Setting<Boolean> startCornerSide = sgGeneral.add(new BoolSetting.Builder()
-        .name("start-corner-side")
-        .description("If true, start building map on the north side, south otherwise.")
-        .defaultValue(true)
-        .build()
-    );
-
     private final Setting<Integer> mapFillSquareSize = sgGeneral.add(new IntSetting.Builder()
         .name("map-fill-square-size")
         .description("The radius of the square the bot fill walk to explore the map.")
@@ -129,17 +125,17 @@ public class CarpetPrinter extends Module {
         .build()
     );
 
-    private final Setting<Boolean> activationReset = sgGeneral.add(new BoolSetting.Builder()
-        .name("activation-reset")
-        .description("Resets all values when module is activated or the client relogs. Disable to be able to pause.")
-        .defaultValue(true)
-        .build()
-    );
-
     private final Setting<SprintMode> sprinting = sgGeneral.add(new EnumSetting.Builder<SprintMode>()
         .name("sprint-mode")
         .description("How to sprint.")
         .defaultValue(SprintMode.NotPlacing)
+        .build()
+    );
+
+    private final Setting<Boolean> activationReset = sgGeneral.add(new BoolSetting.Builder()
+        .name("activation-reset")
+        .description("Resets all values when module is activated or the client relogs. Disable to be able to pause.")
+        .defaultValue(true)
         .build()
     );
 
@@ -154,6 +150,7 @@ public class CarpetPrinter extends Module {
         .name("custom-folder-path")
         .description("Allows to set a custom path to the nbt folder.")
         .defaultValue(false)
+        .onChanged((value) -> warnPathChanged())
         .build()
     );
 
@@ -164,6 +161,7 @@ public class CarpetPrinter extends Module {
         .wide()
         .renderer(StarscriptTextBoxRenderer.class)
         .visible(() -> customFolderPath.get())
+        .onChanged((value) -> warnPathChanged())
         .build()
     );
 
@@ -408,7 +406,6 @@ public class CarpetPrinter extends Module {
     Block[][] map;
     File mapFolder;
     File mapFile;
-    File configFile;
 
     public CarpetPrinter() {
         super(Addon.CATEGORY, "carpet-printer", "Automatically builds 2D carpet maps from nbt files.");
@@ -420,42 +417,41 @@ public class CarpetPrinter extends Module {
         WTable table = new WTable();
         list.add(table);
 
-        // ---- File selection section ----
+        if (!isActive()) {
+            table.add(theme.label("Module has to be enabled for this feature."));
+            table.row();
+            return list;
+        }
+
         File configFolder = new File(mapFolder, "_configs");
-        if (!configFolder.exists()) configFolder.mkdirs();
-        WButton selectFile = table.add(theme.button("Select File")).widget();
-        WLabel fileName = table.add(theme.label(
-            (configFile != null)
-                ? configFile.getName()
-                : "No file selected."
-        )).widget();
-        table.row();
-        selectFile.action = () -> {
+        if (!configFolder.exists()) return table;
+
+        table.add(theme.label("Configurations: "));
+        // ---- Save config button ----
+        WButton saveButton = table.add(theme.button("Save Config")).widget();
+        saveButton.action = () -> {
+            String path = TinyFileDialogs.tinyfd_saveFileDialog(
+                "Save Config",
+                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
+                null,
+                null
+            );
+            if (path != null) saveConfig(new File(path));
+        };
+
+        // ---- Load config button ----
+        WButton loadButton = table.add(theme.button("Load Config")).widget();
+        loadButton.action = () -> {
             String path = TinyFileDialogs.tinyfd_openFileDialog(
-                "Select Config File",
+                "Load Config",
                 new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
                 null,
                 null,
                 false
             );
-
-            if (path != null) {
-                configFile = new File(path);
-                fileName.set(configFile.getName());
-            }
+            if (path != null) loadConfig(new File(path));
         };
-
-        // ---- Save config button ----
-        WButton saveButton = table.add(theme.button("Save Config")).widget();
-        table.add(theme.label(""));
         table.row();
-        saveButton.action = () -> saveConfig();
-
-        // ---- Load config button ----
-        WButton loadButton = table.add(theme.button("Load Config")).widget();
-        table.add(theme.label(""));
-        table.row();
-        loadButton.action = () -> loadConfig();
 
         // ---- Multi-user section ----
         table.add(theme.label("Multi-User: "));
@@ -512,7 +508,6 @@ public class CarpetPrinter extends Module {
             toggle();
             return;
         }
-        configFile = new File(mapFolder.getAbsolutePath() + File.separator + "_configs" + File.separator + "carpet-printer-config.json");
         if (!prepareNextMapFile()) return;
         state = State.SelectingMapArea;
         info("Select the §aMap Building Area (128x128)");
@@ -1282,7 +1277,7 @@ public class CarpetPrinter extends Module {
 
     private void startBuilding() {
         if (availableSlots.isEmpty()) setupSlots();
-        calculateBuildingPath(startCornerSide.get(), true);
+        calculateBuildingPath(true, true);
         HashMap<Item, Integer> requiredItems = Utils.getRequiredItems(mapCorner, workingInterval, linesPerRun.get(), availableSlots.size(), map);
         Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
         if (invInformation.getLeft().size() != 0) {
@@ -1499,7 +1494,7 @@ public class CarpetPrinter extends Module {
         }
     }
 
-    private void saveConfig() {
+    private void saveConfig(File configFile) {
         if (configFile == null) {
             error("No config file name selected.");
             return;
@@ -1519,17 +1514,20 @@ public class CarpetPrinter extends Module {
                 dumpStation,
                 mapCorner,
                 materialDict);
-            info("Config saved to " + configFile.getAbsolutePath());
+            Text configText = Text.literal(configFile.getName())
+                .styled(style -> style
+                    .withColor(Formatting.GREEN)
+                    .withClickEvent(new ClickEvent.OpenFile(configFile.getAbsolutePath().toString()))
+                    .withHoverEvent(new HoverEvent.ShowText(Text.literal("Open config")))
+                    .withUnderline(true));
+            info(Text.literal("Successfully saved config to: ").append(configText));
         } catch (IOException e) {
             error("Failed to create config file.");
         }
     }
 
-    private void loadConfig() {
-        if (configFile == null || !configFile.exists()) {
-            error("No config file selected.");
-            return;
-        }
+    private void loadConfig(File configFile) {
+        if (configFile == null || !configFile.exists()) return;
         List<State> allowedStates = List.of(
             State.SelectingReset,
             State.SelectingChests,
@@ -1564,7 +1562,13 @@ public class CarpetPrinter extends Module {
             this.mapCorner = data.mapCorner;
             MapAreaCache.reset(mapCorner);
             this.materialDict = data.materialDict;
-            info("Config loaded from " + configFile.getAbsolutePath());
+            Text configText = Text.literal(configFile.getName())
+                .styled(style -> style
+                    .withColor(Formatting.GREEN)
+                    .withClickEvent(new ClickEvent.OpenFile(configFile.getAbsolutePath().toString()))
+                    .withHoverEvent(new HoverEvent.ShowText(Text.literal("Open config")))
+                    .withUnderline(true));
+            info(Text.literal("Successfully loaded config: ").append(configText));
             info("Interact with the Start Block to start printing.");
             state = State.SelectingChests;
         } catch (IOException e) {
@@ -1585,6 +1589,13 @@ public class CarpetPrinter extends Module {
         for (String slave : foundPlayers) {
             if (slaves.contains(slave)) continue;
             toBeSentMessages.add(slave + " register");
+        }
+    }
+
+    private void warnPathChanged() {
+        if (checkpoints != null && !activationReset.get()) {
+            String reString = isActive() ? "re" : "";
+            warning("The custom path is only applied if the module is " + reString + "started with Activation Reset enabled!");
         }
     }
 
