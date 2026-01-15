@@ -5,6 +5,7 @@ import com.julflips.nerv_printer.modules.FullBlockPrinter;
 import com.julflips.nerv_printer.modules.MapNamer;
 import com.julflips.nerv_printer.modules.StaircasedPrinter;
 import com.julflips.nerv_printer.utils.MapAreaCache;
+import com.julflips.nerv_printer.utils.SlaveSystem;
 import com.julflips.nerv_printer.utils.Utils;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.MeteorClient;
@@ -23,6 +24,7 @@ public class Addon extends MeteorAddon {
         // Subscribe Util classes to Events
         MeteorClient.EVENT_BUS.subscribe(Utils.class);
         MeteorClient.EVENT_BUS.subscribe(MapAreaCache.class);
+        MeteorClient.EVENT_BUS.subscribe(SlaveSystem.class);
 
         // Modules
         Modules.get().add(new CarpetPrinter());

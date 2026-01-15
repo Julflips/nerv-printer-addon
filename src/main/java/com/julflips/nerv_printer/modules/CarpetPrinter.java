@@ -1,10 +1,7 @@
 package com.julflips.nerv_printer.modules;
 
 import com.julflips.nerv_printer.Addon;
-import com.julflips.nerv_printer.utils.ConfigDeserializer;
-import com.julflips.nerv_printer.utils.ConfigSerializer;
-import com.julflips.nerv_printer.utils.MapAreaCache;
-import com.julflips.nerv_printer.utils.Utils;
+import com.julflips.nerv_printer.utils.*;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -34,7 +31,6 @@ import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
-import net.minecraft.network.packet.s2c.play.GameMessageS2CPacket;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.screen.slot.SlotActionType;
@@ -243,6 +239,7 @@ public class CarpetPrinter extends Module {
         .name("direct-message-command")
         .description("The command used to send direct messages between master and slaves.")
         .defaultValue("w")
+        .onChanged((value) -> SlaveSystem.directMessageCommand = value)
         .build()
     );
 
@@ -252,6 +249,7 @@ public class CarpetPrinter extends Module {
         .defaultValue(50)
         .min(1)
         .sliderRange(1, 100)
+        .onChanged((value) -> SlaveSystem.commandDelay = value)
         .build()
     );
 
@@ -370,11 +368,9 @@ public class CarpetPrinter extends Module {
     int timeoutTicks;
     int closeResetChestTicks;
     int interactTimeout;
-    int commandTimeout;
     int toBeSwappedSlot;
     long lastTickTime;
     boolean closeNextInvPacket;
-    String master;
     State state;
     State oldState;
     Pair<Integer, Integer> workingInterval;     //Interval the bot should work in 0-127
@@ -400,10 +396,6 @@ public class CarpetPrinter extends Module {
     ArrayList<File> startedFiles;
     ArrayList<Integer> restockBacklogSlots;
     ArrayList<BlockPos> knownErrors;
-    ArrayList<String> toBeSentMessages = new ArrayList<>();
-    ArrayList<String> toBeConfirmedSlaves;
-    ArrayList<String> slaves;
-    ArrayList<String> finishedSlaves;
     Block[][] map;
     File mapFolder;
     File mapFile;
@@ -454,20 +446,7 @@ public class CarpetPrinter extends Module {
         };
         table.row();
 
-        // ---- Multi-user section ----
-        table.add(theme.label("Multi-User: "));
-        WButton startButton = table.add(theme.button("Register players in range")).widget();
-        startButton.action = () -> registerSlaves();
-
-        WButton endButton = table.add(theme.button("Remove players in range")).widget();
-        endButton.action = () -> removeSlaves();
-
-        WButton pauseButton = table.add(theme.button("Pause all")).widget();
-        pauseButton.action = () -> toggleSlaves(false);
-
-        WButton continueButton = table.add(theme.button("Continue all")).widget();
-        continueButton.action = () -> toggleSlaves(true);
-        table.row();
+        SlaveSystem.getSlaveUI(theme, table);
 
         return list;
     }
@@ -487,10 +466,6 @@ public class CarpetPrinter extends Module {
         startedFiles = new ArrayList<>();
         restockBacklogSlots = new ArrayList<>();
         knownErrors = new ArrayList<>();
-        toBeSentMessages = new ArrayList<>();
-        toBeConfirmedSlaves = new ArrayList<>();
-        slaves = new ArrayList<>();
-        finishedSlaves = new ArrayList<>();
         reset = null;
         mapCorner = null;
         lastInteractedBlockPos = null;
@@ -504,11 +479,12 @@ public class CarpetPrinter extends Module {
         closeNextInvPacket = false;
         timeoutTicks = 0;
         interactTimeout = 0;
-        commandTimeout = 0;
         closeResetChestTicks = 0;
         toBeSwappedSlot = -1;
-        master = null;
         oldState = null;
+
+        // Initialize Slave System settings
+        SlaveSystem.setupSlaveSystem(this, commandDelay.get(), directMessageCommand.get());
 
         if (!customFolderPath.get()) {
             mapFolder = new File(Utils.getMinecraftDirectory(), "nerv-printer");
@@ -527,85 +503,6 @@ public class CarpetPrinter extends Module {
     @Override
     public void onDeactivate() {
         Utils.setForwardPressed(false);
-    }
-
-    private void refillInventory(HashMap<Item, Integer> invMaterial) {
-        //Fills restockList with required items
-        restockList.clear();
-        HashMap<Item, Integer> requiredItems = Utils.getRequiredItems(mapCorner, workingInterval, linesPerRun.get(), availableSlots.size(), map);
-        for (Item item : invMaterial.keySet()) {
-            int oldAmount = requiredItems.remove(item);
-            requiredItems.put(item, oldAmount - invMaterial.get(item));
-        }
-
-        for (Item item : requiredItems.keySet()) {
-            if (requiredItems.get(item) <= 0) continue;
-            int stacks = (int) Math.ceil((float) requiredItems.get(item) / 64f);
-            info("Restocking §a" + stacks + " stacks " + item.getName().getString() + " (" + requiredItems.get(item) + ")");
-            restockList.add(0, Triple.of(item, stacks, requiredItems.get(item)));
-        }
-        addClosestRestockCheckpoint();
-    }
-
-    private void addClosestRestockCheckpoint() {
-        //Determine closest restock chest for material in restock list
-        if (restockList.size() == 0) return;
-        double smallestDistance = Double.MAX_VALUE;
-        Triple<Item, Integer, Integer> closestEntry = null;
-        Pair<BlockPos, Vec3d> restockPos = null;
-        for (Triple<Item, Integer, Integer> entry : restockList) {
-            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(entry.getLeft());
-            if (bestRestockPos == null) return;
-            double chestDistance = PlayerUtils.distanceTo(bestRestockPos.getRight());
-            if (chestDistance < smallestDistance) {
-                smallestDistance = chestDistance;
-                closestEntry = entry;
-                restockPos = bestRestockPos;
-            }
-        }
-        //Set closest material as first and as checkpoint
-        restockList.remove(closestEntry);
-        restockList.add(0, closestEntry);
-        checkpoints.add(0, new Pair(restockPos.getRight(), new Pair("refill", restockPos.getLeft())));
-    }
-
-    private void calculateBuildingPath(boolean cornerSide, boolean sprintFirst) {
-        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
-        //Fills checkpoints list
-        boolean isStartSide = cornerSide;
-        checkpoints.clear();
-        for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
-            if (!Utils.isInInterval(workingInterval, x)) continue;
-            boolean lineFinished = true;
-            for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
-                int adjustedX = x + lineBonus;
-                if (adjustedX > workingInterval.getRight()) break;
-                for (int z = 0; z < 128; z++) {
-                    BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, z));
-                    if (blockState.isAir() && map[adjustedX][z] != null) {
-                        //If there is a replaceable block and not an ignored block type at the position. Mark the line as not done
-                        lineFinished = false;
-                        break;
-                    }
-                }
-            }
-            if (lineFinished) continue;
-            Vec3d cp1 = mapCorner.toCenterPos().add(x, 0, 0);
-            Vec3d cp2 = mapCorner.toCenterPos().add(x, 0, 127);
-            if (isStartSide) {
-                checkpoints.add(new Pair(cp1, new Pair("", null)));
-                checkpoints.add(new Pair(cp2, new Pair("lineEnd", null)));
-            } else {
-                checkpoints.add(new Pair(cp2, new Pair("", null)));
-                checkpoints.add(new Pair(cp1, new Pair("lineEnd", null)));
-            }
-            isStartSide = !isStartSide;
-        }
-        if (checkpoints.size() > 0 && sprintFirst) {
-            //Make player sprint to the start of the map
-            Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
-            checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
-        }
     }
 
     @EventHandler
@@ -675,10 +572,7 @@ public class CarpetPrinter extends Module {
                         return;
                     }
 
-                    setIntervals();
-                    for (String slave : slaves) {
-                        toBeSentMessages.add(slave + " start");
-                    }
+                    SlaveSystem.generateIntervals(map.length);
                     startBuilding();
                 }
                 break;
@@ -692,73 +586,6 @@ public class CarpetPrinter extends Module {
         if (event.packet instanceof PlayerPositionLookS2CPacket) {
             timeoutTicks = posResetTimeout.get();
             if (timeoutTicks > 0) Utils.setForwardPressed(false);
-        }
-
-        if (event.packet instanceof GameMessageS2CPacket packet) {
-            String content = packet.content().getString();
-            String[] spaceSplit = content.split(" ");
-            String[] colonSplit = content.replace(" ", "").split(":");
-            if (spaceSplit.length < 2 || colonSplit.length < 2) return;
-            String sender = spaceSplit[0];
-            String command = colonSplit[1];
-            if (sender == mc.player.getName().getString()) return;
-            switch (command) {
-                case "register":
-                    if (master == null && toBeConfirmedSlaves.isEmpty()
-                        && slaves.isEmpty() && Utils.canSeePlayer(sender)) {
-                        master = sender;
-                        toBeSentMessages.add(sender + " accept");
-                    }
-                    break;
-                case "accept":
-                    if (toBeConfirmedSlaves.contains(sender)) {
-                        toBeConfirmedSlaves.remove(sender);
-                        slaves.add(sender);
-                        info("Accepting slave: " + sender +". Total slaves: " + slaves.size());
-                    }
-                    break;
-                case "interval":
-                    if (!sender.equals(master) || colonSplit.length<4) break;
-                    workingInterval = new Pair<>(Integer.valueOf(colonSplit[2]), Integer.valueOf(colonSplit[3]));
-                    trueInterval = workingInterval;
-                    info("Set working interval to: " + workingInterval.getLeft() + ", " + workingInterval.getRight());
-                    break;
-                case "start":
-                    if (!sender.equals(master)) break;
-                    if (state.equals(State.AwaitContinue)) {
-                        prepareNextMapFile();
-                    }
-                    startBuilding();
-                case "finished":
-                    if (!slaves.contains(sender)) break;
-                    finishedSlaves.add(sender);
-                    if (state.equals(State.AwaitContinue) && finishedSlaves.size() == slaves.size()) {
-                        endBuilding();
-                    }
-                    break;
-                case "error":
-                    if (!slaves.contains(sender) || colonSplit.length<4) break;
-                    BlockPos errorPos = mapCorner.add(Integer.valueOf(colonSplit[2]), 0, Integer.valueOf(colonSplit[3]));
-                    if (!knownErrors.contains(errorPos)) {
-                        knownErrors.add(errorPos);
-                    }
-                    break;
-                case "pause":
-                    if (!sender.equals(master) || state.equals(State.AwaitContinue)) break;
-                    oldState = state;
-                    state = State.AwaitContinue;
-                    Utils.setForwardPressed(false);
-                    break;
-                case "continue":
-                    if (!sender.equals(master) || oldState == null) break;
-                    state = oldState;
-                    oldState = null;
-                    break;
-                case "remove":
-                    if (!sender.equals(master)) break;
-                    toggle();
-                    break;
-            }
         }
 
         if (!(event.packet instanceof InventoryS2CPacket packet)) return;
@@ -921,36 +748,17 @@ public class CarpetPrinter extends Module {
         }
     }
 
-    private void getOneItem(int sourceSlot, boolean avoidFirstHotBar, InventoryS2CPacket packet) {
-        int targetSlot = availableHotBarSlots.get(0);
-        if (avoidFirstHotBar) {
-            targetSlot = availableSlots.get(0);
-            if (availableSlots.get(0) == availableHotBarSlots.get(0)) {
-                targetSlot = availableSlots.get(1);
-            }
-        }
-        if (targetSlot < 9) {
-            targetSlot += 27;
-        } else {
-            targetSlot -= 9;
-        }
-        targetSlot = packet.contents().size() - 36 + targetSlot;
-        mc.interactionManager.clickSlot(packet.syncId(), sourceSlot, 0, SlotActionType.PICKUP, mc.player);
-        mc.interactionManager.clickSlot(packet.syncId(), targetSlot, 1, SlotActionType.PICKUP, mc.player);
-        mc.interactionManager.clickSlot(packet.syncId(), sourceSlot, 0, SlotActionType.PICKUP, mc.player);
-    }
-
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (commandTimeout > 0) commandTimeout--;
-        if (!toBeSentMessages.isEmpty()) {
-            if (commandTimeout <= 0) {
-                mc.getNetworkHandler().sendChatCommand(directMessageCommand.get() + " " + toBeSentMessages.remove(0));
-                commandTimeout = commandDelay.get();
+        if (state == null) return;
+
+        if (state.equals(State.AwaitContinue)) {
+            if (!SlaveSystem.isSlave() && SlaveSystem.allSlavesFinished()) {
+                endBuilding();
+            } else {
+                return;
             }
         }
-
-        if (state == null || state.equals(State.AwaitContinue)) return;
 
         long timeDifference = System.currentTimeMillis() - lastTickTime;
         int allowedPlacements = (int) Math.floor(timeDifference / placeDelay.get());
@@ -1043,9 +851,6 @@ public class CarpetPrinter extends Module {
         if (state == State.AwaitNBTFile) {
             if (!prepareNextMapFile()) return;
             startBuilding();
-            for (String slave : slaves) {
-                toBeSentMessages.add(slave +  " start");
-            }
         }
 
         // Handle Block Entity interaction response
@@ -1087,9 +892,9 @@ public class CarpetPrinter extends Module {
                                 + MapAreaCache.getCachedBlockState(errorPos).getBlock().getName().getString()
                                 + ". Should be: " + map[relativePos.getX()][relativePos.getZ()].getName().getString());
                         }
-                        if (master != null) {
+                        if (SlaveSystem.isSlave()) {
                             // Obfuscate error pas as relative pos
-                            toBeSentMessages.add(master + " error:" + relativePos.getX() + ":" + relativePos.getZ());
+                            SlaveSystem.queueMasterDM("error:" + relativePos.getX() + ":" + relativePos.getZ());
                         }
                     }
                     knownErrors.addAll(newErrors);
@@ -1160,13 +965,13 @@ public class CarpetPrinter extends Module {
                     return;
             }
             if (checkpoints.size() == 0) {
-                if (master != null) {
-                    toBeSentMessages.add(master + " finished");
+                if (SlaveSystem.isSlave()) {
+                    SlaveSystem.queueMasterDM("finished");
                     state = State.AwaitContinue;
                     Utils.setForwardPressed(false);
                     return;
                 }
-                if (finishedSlaves.size() == slaves.size()) {
+                if (SlaveSystem.allSlavesFinished()) {
                     endBuilding();
                 } else {
                     info("Waiting for slaves to finish...");
@@ -1216,13 +1021,122 @@ public class CarpetPrinter extends Module {
         }
     }
 
-    private int getDumpSlot() {
-        HashMap<Item, Integer> requiredItems = Utils.getRequiredItems(mapCorner, workingInterval, linesPerRun.get(), availableSlots.size(), map);
-        Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
-        if (invInformation.getLeft().isEmpty()) {
-            return -1;
+    // Restocking
+
+    private Pair<BlockPos, Vec3d> getBestChest(Item item) {
+        Vec3d bestPos = null;
+        BlockPos bestChestPos = null;
+        ArrayList<Pair<BlockPos, Vec3d>> list;
+        if (item.equals(Items.CARTOGRAPHY_TABLE)) {
+            list = mapMaterialChests;
+        } else if (materialDict.containsKey(item)) {
+            list = materialDict.get(item);
+        } else {
+            warning("No chest found for " + item.getName().getString());
+            toggle();
+            return null;
         }
-        return invInformation.getLeft().get(0);
+        //Get nearest chest
+        for (Pair<BlockPos, Vec3d> p : list) {
+            //Skip chests that have already been checked
+            if (checkedChests.contains(p.getLeft())) continue;
+            if (bestPos == null || PlayerUtils.distanceTo(p.getRight()) < PlayerUtils.distanceTo(bestPos)) {
+                bestPos = p.getRight();
+                bestChestPos = p.getLeft();
+            }
+        }
+        if (bestPos == null || bestChestPos == null) {
+            checkedChests.clear();
+            return getBestChest(item);
+        }
+        return new Pair(bestChestPos, bestPos);
+    }
+
+    private void refillInventory(HashMap<Item, Integer> invMaterial) {
+        //Fills restockList with required items
+        restockList.clear();
+        HashMap<Item, Integer> requiredItems = Utils.getRequiredItems(mapCorner, workingInterval, linesPerRun.get(), availableSlots.size(), map);
+        for (Item item : invMaterial.keySet()) {
+            int oldAmount = requiredItems.remove(item);
+            requiredItems.put(item, oldAmount - invMaterial.get(item));
+        }
+
+        for (Item item : requiredItems.keySet()) {
+            if (requiredItems.get(item) <= 0) continue;
+            int stacks = (int) Math.ceil((float) requiredItems.get(item) / 64f);
+            info("Restocking §a" + stacks + " stacks " + item.getName().getString() + " (" + requiredItems.get(item) + ")");
+            restockList.add(0, Triple.of(item, stacks, requiredItems.get(item)));
+        }
+        addClosestRestockCheckpoint();
+    }
+
+    private void addClosestRestockCheckpoint() {
+        //Determine closest restock chest for material in restock list
+        if (restockList.size() == 0) return;
+        double smallestDistance = Double.MAX_VALUE;
+        Triple<Item, Integer, Integer> closestEntry = null;
+        Pair<BlockPos, Vec3d> restockPos = null;
+        for (Triple<Item, Integer, Integer> entry : restockList) {
+            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(entry.getLeft());
+            if (bestRestockPos == null) return;
+            double chestDistance = PlayerUtils.distanceTo(bestRestockPos.getRight());
+            if (chestDistance < smallestDistance) {
+                smallestDistance = chestDistance;
+                closestEntry = entry;
+                restockPos = bestRestockPos;
+            }
+        }
+        //Set closest material as first and as checkpoint
+        restockList.remove(closestEntry);
+        restockList.add(0, closestEntry);
+        checkpoints.add(0, new Pair(restockPos.getRight(), new Pair("refill", restockPos.getLeft())));
+    }
+
+    private void endRestocking() {
+        if (restockList.get(0).getMiddle() > 0) {
+            warning("Not all necessary stacks restocked. Searching for another chest...");
+            //Search for the next best chest
+            checkedChests.add(lastInteractedBlockPos);
+
+            Item foundItem = null;
+            for (Item item : materialDict.keySet()) {
+                for (Pair<BlockPos, Vec3d> p : materialDict.get(item)) {
+                    if (p.getLeft().equals(lastInteractedBlockPos)) {
+                        foundItem = item;
+                        break;
+                    }
+                }
+            }
+            if (foundItem == null) {
+                warning("Could not find material for chest position : " + lastInteractedBlockPos.toShortString());
+                toggle();
+                return;
+            }
+            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(foundItem);
+            if (bestRestockPos == null) return;
+            checkpoints.add(0, new Pair<>(bestRestockPos.getRight(), new Pair<>("refill", bestRestockPos.getLeft())));
+        } else {
+            checkedChests.clear();
+            restockList.remove(0);
+            addClosestRestockCheckpoint();
+        }
+        timeoutTicks = postRestockDelay.get();
+        state = State.Walking;
+    }
+
+    // Block Interactions
+
+    private void interactWithBlock(BlockPos blockPos) {
+        Utils.setForwardPressed(false);
+        mc.player.setVelocity(0, 0, 0);
+        mc.player.setYaw((float) Rotations.getYaw(blockPos.toCenterPos()));
+        mc.player.setPitch((float) Rotations.getPitch(blockPos.toCenterPos()));
+
+        BlockHitResult hitResult = new BlockHitResult(blockPos.toCenterPos(), Utils.getInteractionSide(blockPos), blockPos, false);
+        BlockUtils.interact(hitResult, Hand.MAIN_HAND, true);
+        //Set timeout for chest interaction
+        interactTimeout = retryInteractTimer.get();
+        lastInteractedBlockPos = blockPos;
     }
 
     private boolean tryPlacingBlock(BlockPos pos) {
@@ -1258,45 +1172,49 @@ public class CarpetPrinter extends Module {
         return false;
     }
 
-    private void endRestocking() {
-        if (restockList.get(0).getMiddle() > 0) {
-            warning("Not all necessary stacks restocked. Searching for another chest...");
-            //Search for the next best chest
-            checkedChests.add(lastInteractedBlockPos);
-            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(getMaterialFromPos(lastInteractedBlockPos));
-            if (bestRestockPos == null) return;
-            checkpoints.add(0, new Pair<>(bestRestockPos.getRight(), new Pair<>("refill", bestRestockPos.getLeft())));
-        } else {
-            checkedChests.clear();
-            restockList.remove(0);
-            addClosestRestockCheckpoint();
-        }
-        timeoutTicks = postRestockDelay.get();
-        state = State.Walking;
-    }
+    // Path and Building Management
 
-    private boolean setupSlots() {
-        availableSlots = Utils.getAvailableSlots(materialDict);
-        for (int slot : availableSlots) {
-            if (slot < 9) {
-                availableHotBarSlots.add(slot);
+    private void calculateBuildingPath(boolean cornerSide, boolean sprintFirst) {
+        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
+        //Fills checkpoints list
+        boolean isStartSide = cornerSide;
+        checkpoints.clear();
+        for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
+            if (!Utils.isInInterval(workingInterval, x)) continue;
+            boolean lineFinished = true;
+            for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
+                int adjustedX = x + lineBonus;
+                if (adjustedX > workingInterval.getRight()) break;
+                for (int z = 0; z < 128; z++) {
+                    BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, z));
+                    if (blockState.isAir() && map[adjustedX][z] != null) {
+                        //If there is a replaceable block and not an ignored block type at the position. Mark the line as not done
+                        lineFinished = false;
+                        break;
+                    }
+                }
             }
+            if (lineFinished) continue;
+            Vec3d cp1 = mapCorner.toCenterPos().add(x, 0, 0);
+            Vec3d cp2 = mapCorner.toCenterPos().add(x, 0, 127);
+            if (isStartSide) {
+                checkpoints.add(new Pair(cp1, new Pair("", null)));
+                checkpoints.add(new Pair(cp2, new Pair("lineEnd", null)));
+            } else {
+                checkpoints.add(new Pair(cp2, new Pair("", null)));
+                checkpoints.add(new Pair(cp1, new Pair("lineEnd", null)));
+            }
+            isStartSide = !isStartSide;
         }
-        info("Inventory slots available for building: " + availableSlots);
-        if (availableHotBarSlots.size() == 0) {
-            warning("No free slots found in hot-bar!");
-            toggle();
-            return false;
+        if (checkpoints.size() > 0 && sprintFirst) {
+            //Make player sprint to the start of the map
+            Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
+            checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
         }
-        if (availableSlots.size() < 2) {
-            warning("You need at least 2 free inventory slots!");
-            toggle();
-            return false;
-        }
-        return true;
     }
 
     private void startBuilding() {
+        if (!SlaveSystem.isSlave()) SlaveSystem.sendToAllSlaves("start");
         if (availableSlots.isEmpty()) setupSlots();
         calculateBuildingPath(true, true);
         HashMap<Item, Integer> requiredItems = Utils.getRequiredItems(mapCorner, workingInterval, linesPerRun.get(), availableSlots.size(), map);
@@ -1341,7 +1259,7 @@ public class CarpetPrinter extends Module {
         state = State.Walking;
         workingInterval = trueInterval;
         knownErrors.clear();
-        finishedSlaves.clear();
+        SlaveSystem.finishedSlaves.clear();
         Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
         if (bestChest == null) return;
         checkpoints.add(0, new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
@@ -1355,165 +1273,99 @@ public class CarpetPrinter extends Module {
         }
     }
 
-    private Pair<BlockPos, Vec3d> getBestChest(Item item) {
-        Vec3d bestPos = null;
-        BlockPos bestChestPos = null;
-        ArrayList<Pair<BlockPos, Vec3d>> list;
-        if (item.equals(Items.CARTOGRAPHY_TABLE)) {
-            list = mapMaterialChests;
-        } else if (materialDict.containsKey(item)) {
-            list = materialDict.get(item);
-        } else {
-            warning("No chest found for " + item.getName().getString());
-            toggle();
-            return null;
-        }
-        //Get nearest chest
-        for (Pair<BlockPos, Vec3d> p : list) {
-            //Skip chests that have already been checked
-            if (checkedChests.contains(p.getLeft())) continue;
-            if (bestPos == null || PlayerUtils.distanceTo(p.getRight()) < PlayerUtils.distanceTo(bestPos)) {
-                bestPos = p.getRight();
-                bestChestPos = p.getLeft();
+    // Inventory Management
+
+    private boolean setupSlots() {
+        availableSlots = Utils.getAvailableSlots(materialDict);
+        for (int slot : availableSlots) {
+            if (slot < 9) {
+                availableHotBarSlots.add(slot);
             }
         }
-        if (bestPos == null || bestChestPos == null) {
-            checkedChests.clear();
-            return getBestChest(item);
-        }
-        return new Pair(bestChestPos, bestPos);
-    }
-
-    private void interactWithBlock(BlockPos blockPos) {
-        Utils.setForwardPressed(false);
-        mc.player.setVelocity(0, 0, 0);
-        mc.player.setYaw((float) Rotations.getYaw(blockPos.toCenterPos()));
-        mc.player.setPitch((float) Rotations.getPitch(blockPos.toCenterPos()));
-
-        BlockHitResult hitResult = new BlockHitResult(blockPos.toCenterPos(), Utils.getInteractionSide(blockPos), blockPos, false);
-        BlockUtils.interact(hitResult, Hand.MAIN_HAND, true);
-        //Set timeout for chest interaction
-        interactTimeout = retryInteractTimer.get();
-        lastInteractedBlockPos = blockPos;
-    }
-
-    private Item getMaterialFromPos(BlockPos pos) {
-        for (Item material : materialDict.keySet()) {
-            for (Pair<BlockPos, Vec3d> p : materialDict.get(material)) {
-                if (p.getLeft().equals(pos)) return material;
-            }
-        }
-        warning("Could not find material for chest position : " + pos.toShortString());
-        toggle();
-        return null;
-    }
-
-    private boolean prepareNextMapFile() {
-        mapFile = Utils.getNextMapFile(mapFolder, startedFiles, moveToFinishedFolder.get());
-
-        if (mapFile == null) {
-            if (disableOnFinished.get()) {
-                info("All nbt files finished");
-                toggle();
-                return false;
-            } else {
-                return false;
-            }
-        }
-        if (!loadNBTFile()) {
-            warning("Failed to read nbt file.");
+        info("Inventory slots available for building: " + availableSlots);
+        if (availableHotBarSlots.size() == 0) {
+            warning("No free slots found in hot-bar!");
             toggle();
             return false;
         }
-
+        if (availableSlots.size() < 2) {
+            warning("You need at least 2 free inventory slots!");
+            toggle();
+            return false;
+        }
         return true;
     }
 
-    private boolean loadNBTFile() {
-        try {
-            info("Building: §a" + mapFile.getName());
-            NbtSizeTracker sizeTracker = new NbtSizeTracker(0x20000000L, 100);
-            NbtCompound nbt = NbtIo.readCompressed(mapFile.toPath(), sizeTracker);
-            //Extracting the palette
-            NbtList paletteList = (NbtList) nbt.get("palette");
-            blockPaletteDict = Utils.getBlockPalette(paletteList);
-
-            //Remove any blocks that should be ignored
-            List<Integer> toBeRemoved = new ArrayList<>();
-            for (int key : blockPaletteDict.keySet()) {
-                if (ignoredBlocks.get().contains(blockPaletteDict.get(key).getLeft())) toBeRemoved.add(key);
-            }
-            for (int key : toBeRemoved) blockPaletteDict.remove(key);
-
-            NbtList blockList = (NbtList) nbt.get("blocks");
-            map = Utils.generateMapArray(blockList, blockPaletteDict);
-
-            info("Requirements: ");
-            for (Pair<Block, Integer> p : blockPaletteDict.values()) {
-                info(p.getLeft().getName().getString() + ": " + p.getRight());
-            }
-
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
+    private int getDumpSlot() {
+        HashMap<Item, Integer> requiredItems = Utils.getRequiredItems(mapCorner, workingInterval, linesPerRun.get(), availableSlots.size(), map);
+        Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
+        if (invInformation.getLeft().isEmpty()) {
+            return -1;
         }
+        return invInformation.getLeft().get(0);
     }
 
-    @Override
-    public String getInfoString() {
-        if (mapFile != null) {
-            return mapFile.getName();
+    private void getOneItem(int sourceSlot, boolean avoidFirstHotBar, InventoryS2CPacket packet) {
+        int targetSlot = availableHotBarSlots.get(0);
+        if (avoidFirstHotBar) {
+            targetSlot = availableSlots.get(0);
+            if (availableSlots.get(0) == availableHotBarSlots.get(0)) {
+                targetSlot = availableSlots.get(1);
+            }
+        }
+        if (targetSlot < 9) {
+            targetSlot += 27;
         } else {
-            return "None";
+            targetSlot -= 9;
+        }
+        targetSlot = packet.contents().size() - 36 + targetSlot;
+        mc.interactionManager.clickSlot(packet.syncId(), sourceSlot, 0, SlotActionType.PICKUP, mc.player);
+        mc.interactionManager.clickSlot(packet.syncId(), targetSlot, 1, SlotActionType.PICKUP, mc.player);
+        mc.interactionManager.clickSlot(packet.syncId(), sourceSlot, 0, SlotActionType.PICKUP, mc.player);
+    }
+
+    // Slave Logic
+
+    public void setInterval(Pair<Integer, Integer> interval) {
+        info("Set interval to: " + interval.getLeft() + " - " + interval.getRight());
+        workingInterval = interval;
+        trueInterval = interval;
+    }
+
+    public void addError(BlockPos relativeBlockPos) {
+        BlockPos absoluteErrorPos = mapCorner.add(relativeBlockPos);
+        if (!knownErrors.contains(absoluteErrorPos)) knownErrors.add(absoluteErrorPos);
+    }
+
+    public void startNextMap() {
+        state = State.AwaitNBTFile;
+    }
+
+    public void pause() {
+        if (!state.equals(CarpetPrinter.State.AwaitContinue)) {
+            oldState = state;
+            state = CarpetPrinter.State.AwaitContinue;
+            Utils.setForwardPressed(false);
         }
     }
 
-    @EventHandler
-    private void onRender(Render3DEvent event) {
-        if (mapCorner == null || !render.get()) return;
-        event.renderer.box(mapCorner, color.get(), color.get(), ShapeMode.Lines, 0);
-        event.renderer.box(mapCorner.getX(), mapCorner.getY(), mapCorner.getZ(), mapCorner.getX() + 128, mapCorner.getY(), mapCorner.getZ() + 128, color.get(), color.get(), ShapeMode.Lines, 0);
-
-        ArrayList<Pair<BlockPos, Vec3d>> renderedPairs = new ArrayList<>();
-        for (ArrayList<Pair<BlockPos, Vec3d>> list : materialDict.values()) {
-            renderedPairs.addAll(list);
-        }
-        renderedPairs.addAll(mapMaterialChests);
-        for (Pair<BlockPos, Vec3d> pair : renderedPairs) {
-            if (renderChestPositions.get())
-                event.renderer.box(pair.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
-            if (renderOpenPositions.get()) {
-                Vec3d openPos = pair.getRight();
-                event.renderer.box(openPos.x - indicatorSize.get(), openPos.y - indicatorSize.get(), openPos.z - indicatorSize.get(), openPos.x + indicatorSize.get(), openPos.y + indicatorSize.get(), openPos.z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-        }
-
-        if (renderCheckpoints.get()) {
-            for (Pair<Vec3d, Pair<String, BlockPos>> pair : checkpoints) {
-                Vec3d cp = pair.getLeft();
-                event.renderer.box(cp.x - indicatorSize.get(), cp.y - indicatorSize.get(), cp.z - indicatorSize.get(), cp.getX() + indicatorSize.get(), cp.getY() + indicatorSize.get(), cp.getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-        }
-
-        if (renderSpecialInteractions.get()) {
-            if (reset != null) {
-                event.renderer.box(reset.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
-                event.renderer.box(reset.getRight().x - indicatorSize.get(), reset.getRight().y - indicatorSize.get(), reset.getRight().z - indicatorSize.get(), reset.getRight().getX() + indicatorSize.get(), reset.getRight().getY() + indicatorSize.get(), reset.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-            if (cartographyTable != null) {
-                event.renderer.box(cartographyTable.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
-                event.renderer.box(cartographyTable.getRight().x - indicatorSize.get(), cartographyTable.getRight().y - indicatorSize.get(), cartographyTable.getRight().z - indicatorSize.get(), cartographyTable.getRight().getX() + indicatorSize.get(), cartographyTable.getRight().getY() + indicatorSize.get(), cartographyTable.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-            if (dumpStation != null) {
-                event.renderer.box(dumpStation.getLeft().x - indicatorSize.get(), dumpStation.getLeft().y - indicatorSize.get(), dumpStation.getLeft().z - indicatorSize.get(), dumpStation.getLeft().getX() + indicatorSize.get(), dumpStation.getLeft().getY() + indicatorSize.get(), dumpStation.getLeft().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-            if (finishedMapChest != null) {
-                event.renderer.box(finishedMapChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
-                event.renderer.box(finishedMapChest.getRight().x - indicatorSize.get(), finishedMapChest.getRight().y - indicatorSize.get(), finishedMapChest.getRight().z - indicatorSize.get(), finishedMapChest.getRight().getX() + indicatorSize.get(), finishedMapChest.getRight().getY() + indicatorSize.get(), finishedMapChest.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
+    public void resume() {
+        if (oldState != null) {
+            state = oldState;
+            oldState = null;
         }
     }
+
+    // Utility
+
+    private void warnPathChanged() {
+        if (checkpoints != null && !activationReset.get()) {
+            String reString = isActive() ? "re" : "";
+            warning("The custom path is only applied if the module is " + reString + "started with Activation Reset enabled!");
+        }
+    }
+
+    // Config System
 
     private void saveConfig(File configFile) {
         if (configFile == null) {
@@ -1597,58 +1449,118 @@ public class CarpetPrinter extends Module {
         }
     }
 
-    private void registerSlaves() {
-        if (state == null) {
-            warning("The module needs to be enabled to register new slaves.");
-            return;
+    // NBT file handling
+
+    private boolean prepareNextMapFile() {
+        mapFile = Utils.getNextMapFile(mapFolder, startedFiles, moveToFinishedFolder.get());
+
+        if (mapFile == null) {
+            if (disableOnFinished.get()) {
+                info("All nbt files finished");
+                toggle();
+                return false;
+            } else {
+                return false;
+            }
         }
-        ArrayList<String> foundPlayers = Utils.getPlayersInRenderDistance();
-        if (foundPlayers.isEmpty()) {
-            warning("No players found in render distance.");
+        if (!loadNBTFile()) {
+            warning("Failed to read nbt file.");
+            toggle();
+            return false;
         }
-        toBeConfirmedSlaves = foundPlayers;
-        for (String slave : foundPlayers) {
-            if (slaves.contains(slave)) continue;
-            toBeSentMessages.add(slave + " register");
+
+        return true;
+    }
+
+    private boolean loadNBTFile() {
+        try {
+            info("Building: §a" + mapFile.getName());
+            NbtSizeTracker sizeTracker = new NbtSizeTracker(0x20000000L, 100);
+            NbtCompound nbt = NbtIo.readCompressed(mapFile.toPath(), sizeTracker);
+            //Extracting the palette
+            NbtList paletteList = (NbtList) nbt.get("palette");
+            blockPaletteDict = Utils.getBlockPalette(paletteList);
+
+            //Remove any blocks that should be ignored
+            List<Integer> toBeRemoved = new ArrayList<>();
+            for (int key : blockPaletteDict.keySet()) {
+                if (ignoredBlocks.get().contains(blockPaletteDict.get(key).getLeft())) toBeRemoved.add(key);
+            }
+            for (int key : toBeRemoved) blockPaletteDict.remove(key);
+
+            NbtList blockList = (NbtList) nbt.get("blocks");
+            map = Utils.generateMapArray(blockList, blockPaletteDict);
+
+            info("Requirements: ");
+            for (Pair<Block, Integer> p : blockPaletteDict.values()) {
+                info(p.getLeft().getName().getString() + ": " + p.getRight());
+            }
+
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
         }
     }
 
-    private void toggleSlaves(boolean active) {
-        String message = active ? " continue" : " pause";
-        for (String slave : slaves) {
-            toBeSentMessages.add(slave + message);
+    // Rendering
+
+    @Override
+    public String getInfoString() {
+        if (mapFile != null) {
+            return mapFile.getName();
+        } else {
+            return "None";
         }
     }
 
-    private void removeSlaves() {
-        ArrayList<String> foundPlayers = Utils.getPlayersInRenderDistance();
-        if (foundPlayers.isEmpty()) {
-            warning("No players found in render distance.");
+    @EventHandler
+    private void onRender(Render3DEvent event) {
+        if (mapCorner == null || !render.get()) return;
+        event.renderer.box(mapCorner, color.get(), color.get(), ShapeMode.Lines, 0);
+        event.renderer.box(mapCorner.getX(), mapCorner.getY(), mapCorner.getZ(), mapCorner.getX() + 128, mapCorner.getY(), mapCorner.getZ() + 128, color.get(), color.get(), ShapeMode.Lines, 0);
+
+        ArrayList<Pair<BlockPos, Vec3d>> renderedPairs = new ArrayList<>();
+        for (ArrayList<Pair<BlockPos, Vec3d>> list : materialDict.values()) {
+            renderedPairs.addAll(list);
         }
-        for (String slave : foundPlayers) {
-            if (!slaves.contains(slave)) continue;
-            toBeSentMessages.add(slave + " remove");
-            slaves.remove(slave);
+        renderedPairs.addAll(mapMaterialChests);
+        for (Pair<BlockPos, Vec3d> pair : renderedPairs) {
+            if (renderChestPositions.get())
+                event.renderer.box(pair.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+            if (renderOpenPositions.get()) {
+                Vec3d openPos = pair.getRight();
+                event.renderer.box(openPos.x - indicatorSize.get(), openPos.y - indicatorSize.get(), openPos.z - indicatorSize.get(), openPos.x + indicatorSize.get(), openPos.y + indicatorSize.get(), openPos.z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+            }
         }
-        setIntervals();
+
+        if (renderCheckpoints.get()) {
+            for (Pair<Vec3d, Pair<String, BlockPos>> pair : checkpoints) {
+                Vec3d cp = pair.getLeft();
+                event.renderer.box(cp.x - indicatorSize.get(), cp.y - indicatorSize.get(), cp.z - indicatorSize.get(), cp.getX() + indicatorSize.get(), cp.getY() + indicatorSize.get(), cp.getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+            }
+        }
+
+        if (renderSpecialInteractions.get()) {
+            if (reset != null) {
+                event.renderer.box(reset.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+                event.renderer.box(reset.getRight().x - indicatorSize.get(), reset.getRight().y - indicatorSize.get(), reset.getRight().z - indicatorSize.get(), reset.getRight().getX() + indicatorSize.get(), reset.getRight().getY() + indicatorSize.get(), reset.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+            }
+            if (cartographyTable != null) {
+                event.renderer.box(cartographyTable.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+                event.renderer.box(cartographyTable.getRight().x - indicatorSize.get(), cartographyTable.getRight().y - indicatorSize.get(), cartographyTable.getRight().z - indicatorSize.get(), cartographyTable.getRight().getX() + indicatorSize.get(), cartographyTable.getRight().getY() + indicatorSize.get(), cartographyTable.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+            }
+            if (dumpStation != null) {
+                event.renderer.box(dumpStation.getLeft().x - indicatorSize.get(), dumpStation.getLeft().y - indicatorSize.get(), dumpStation.getLeft().z - indicatorSize.get(), dumpStation.getLeft().getX() + indicatorSize.get(), dumpStation.getLeft().getY() + indicatorSize.get(), dumpStation.getLeft().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+            }
+            if (finishedMapChest != null) {
+                event.renderer.box(finishedMapChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+                event.renderer.box(finishedMapChest.getRight().x - indicatorSize.get(), finishedMapChest.getRight().y - indicatorSize.get(), finishedMapChest.getRight().z - indicatorSize.get(), finishedMapChest.getRight().getX() + indicatorSize.get(), finishedMapChest.getRight().getY() + indicatorSize.get(), finishedMapChest.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+            }
+        }
     }
 
-    private void setIntervals() {
-        ArrayList<Pair<Integer, Integer>> intervals = Utils.generateIntervals(map.length, slaves.size()+1);
-        workingInterval = intervals.remove(intervals.size()/2);
-        trueInterval = workingInterval;
-        for (int i = 0; i < intervals.size(); i++) {
-            String slave = slaves.get(i);
-            toBeSentMessages.add(slave + " interval:" + intervals.get(i).getLeft() + ":" + intervals.get(i).getRight());
-        }
-    }
-
-    private void warnPathChanged() {
-        if (checkpoints != null && !activationReset.get()) {
-            String reString = isActive() ? "re" : "";
-            warning("The custom path is only applied if the module is " + reString + "started with Activation Reset enabled!");
-        }
-    }
+    // Enums
 
     private enum State {
         SelectingReset,

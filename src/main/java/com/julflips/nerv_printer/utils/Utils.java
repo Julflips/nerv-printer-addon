@@ -431,36 +431,6 @@ public class Utils {
         return bestSide;
     }
 
-    public static ArrayList<String> getPlayersInRenderDistance() {
-        ArrayList<String> foundPlayers = new ArrayList<>();
-        for(Entity entity : mc.world.getEntities()) {
-            if (entity instanceof PlayerEntity player && !mc.player.equals(player)) {
-                foundPlayers.add(player.getName().getString());
-            }
-        }
-        return foundPlayers;
-    }
-
-    public static boolean canSeePlayer(String playerName) {
-        for(Entity entity : mc.world.getEntities()) {
-            if (entity instanceof PlayerEntity player && player.getName().getString().equals(playerName)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static ArrayList<Pair<Integer, Integer>> generateIntervals(int lines, int sections) {
-        int sectionSize = (int) Math.ceil((float) lines / (float) sections);
-        ArrayList<Pair<Integer, Integer>> sectionList = new ArrayList<>();
-        for (int end = lines-1; end >= 0 ; end -= sectionSize) {
-            int start = Math.max(0, end - sectionSize + 1);
-            sectionList.add(new Pair<>(start, end));
-        }
-        Collections.reverse(sectionList);
-        return sectionList;
-    }
-
     public static boolean isInInterval(Pair<Integer, Integer> interval, int number) {
         return number >= interval.getLeft() && number <= interval.getRight();
     }
