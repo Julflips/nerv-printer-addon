@@ -57,8 +57,9 @@ import java.util.concurrent.atomic.AtomicReference;
 public class CarpetPrinter extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgAdvanced = settings.createGroup("Advanced",  false);
+    private final SettingGroup sgMultiUser = settings.createGroup("Multi User", false);
     private final SettingGroup sgError = settings.createGroup("Error Handling");
-    private final SettingGroup sgRender = settings.createGroup("Render");
+    private final SettingGroup sgRender = settings.createGroup("Render", false);
 
     private final Setting<Integer> linesPerRun = sgGeneral.add(new IntSetting.Builder()
         .name("lines-per-run")
@@ -235,24 +236,6 @@ public class CarpetPrinter extends Module {
         .build()
     );
 
-    private final Setting<String> directMessageCommand = sgAdvanced.add(new StringSetting.Builder()
-        .name("direct-message-command")
-        .description("The command used to send direct messages between master and slaves.")
-        .defaultValue("w")
-        .onChanged((value) -> SlaveSystem.directMessageCommand = value)
-        .build()
-    );
-
-    private final Setting<Integer> commandDelay = sgAdvanced.add(new IntSetting.Builder()
-        .name("chat-message-delay")
-        .description("How many ticks to wait between sending chat messages (for multi-user printing).")
-        .defaultValue(50)
-        .min(1)
-        .sliderRange(1, 100)
-        .onChanged((value) -> SlaveSystem.commandDelay = value)
-        .build()
-    );
-
     private final Setting<Double> checkpointBuffer = sgAdvanced.add(new DoubleSetting.Builder()
         .name("checkpoint-buffer")
         .description("The buffer area of the checkpoints. Larger means less precise walking, but might be desired at higher speeds.")
@@ -287,6 +270,42 @@ public class CarpetPrinter extends Module {
         .name("debug-prints")
         .description("Prints additional information.")
         .defaultValue(false)
+        .build()
+    );
+
+    //Multi User
+
+    private final Setting<String> directMessageCommand = sgMultiUser.add(new StringSetting.Builder()
+        .name("direct-message-command")
+        .description("The command used to send direct messages between master and slaves.")
+        .defaultValue("w")
+        .onChanged((value) -> SlaveSystem.directMessageCommand = value)
+        .build()
+    );
+
+    private final Setting<String> senderPrefix = sgMultiUser.add(new StringSetting.Builder()
+        .name("sender-prefix")
+        .description("The text that always comes before the name of sender of every direct message.")
+        .defaultValue("")
+        .onChanged((value) -> SlaveSystem.senderPrefix = value)
+        .build()
+    );
+
+    private final Setting<String> senderSuffix = sgMultiUser.add(new StringSetting.Builder()
+        .name("sender-suffix")
+        .description("The text that is always between the name of the sender and the actual message.")
+        .defaultValue(" whispers to you: ")
+        .onChanged((value) -> SlaveSystem.senderSuffix = value)
+        .build()
+    );
+
+    private final Setting<Integer> commandDelay = sgMultiUser.add(new IntSetting.Builder()
+        .name("chat-message-delay")
+        .description("How many ticks to wait between sending chat messages (for multi-user printing).")
+        .defaultValue(50)
+        .min(1)
+        .sliderRange(1, 100)
+        .onChanged((value) -> SlaveSystem.commandDelay = value)
         .build()
     );
 
@@ -350,7 +369,7 @@ public class CarpetPrinter extends Module {
     private final Setting<Double> indicatorSize = sgRender.add(new DoubleSetting.Builder()
         .name("indicator-size")
         .description("How big the rendered indicator will be.")
-        .defaultValue(0.2)
+        .defaultValue(0.15)
         .min(0)
         .sliderRange(0, 1)
         .visible(() -> render.get())
@@ -438,7 +457,7 @@ public class CarpetPrinter extends Module {
 
         setInterval(new Pair<>(0, 127));
         // Initialize Slave System settings
-        SlaveSystem.setupSlaveSystem(this, commandDelay.get(), directMessageCommand.get());
+        SlaveSystem.setupSlaveSystem(this, commandDelay.get(), directMessageCommand.get(), senderPrefix.get(), senderSuffix.get());
 
         if (!customFolderPath.get()) {
             mapFolder = new File(Utils.getMinecraftDirectory(), "nerv-printer");

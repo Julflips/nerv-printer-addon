@@ -21,6 +21,8 @@ public class SlaveSystem {
 
     public static int commandDelay = 0;
     public static String directMessageCommand = "w";
+    public static String senderPrefix = "";
+    public static String senderSuffix = "";
     public static ArrayList<String> slaves = new ArrayList<>();
     public static HashMap<String, Boolean> activeSlavesDict = new HashMap<>();
     public static SlaveTableController tableController = null;
@@ -32,10 +34,12 @@ public class SlaveSystem {
     private static ArrayList<String> toBeConfirmedSlaves = new ArrayList<>();
     private static String master = null;
 
-    public static void setupSlaveSystem(CarpetPrinter module, int delay, String dmCommand) {
+    public static void setupSlaveSystem(CarpetPrinter module, int delay, String dmCommand, String prefix, String suffix) {
         printerModule = module;
         commandDelay = delay;
         directMessageCommand = dmCommand;
+        senderPrefix = prefix;
+        senderSuffix = suffix;
         slaves.clear();
         toBeSentMessages.clear();
         toBeConfirmedSlaves.clear();
@@ -159,25 +163,28 @@ public class SlaveSystem {
     @EventHandler
     private static void onReceivePacket(PacketEvent.Receive event) {
         if (printerModule != null && event.packet instanceof GameMessageS2CPacket packet) {
-            String content = packet.content().getString();
-            String[] spaceSplit = content.split(" ");
-            String[] colonSplit = content.replace(" ", "").split(":");
-            if (spaceSplit.length < 2 || colonSplit.length < 2) return;
-            String sender = spaceSplit[0];
-            String command = colonSplit[1];
+            String rawMessage = packet.content().getString();
+            int prefixIndex = rawMessage.indexOf(senderPrefix);
+            int suffixIndex = rawMessage.indexOf(senderSuffix);
+            if (prefixIndex == -1 || suffixIndex == -1) return;
+
+            String sender = rawMessage.substring(prefixIndex + senderPrefix.length(), suffixIndex);
             if (sender == mc.player.getName().getString()) return;
+            String content = rawMessage.substring(suffixIndex + senderSuffix.length());
+            String[] colonSplit = content.replace(" ", "").split(":");
+            String command = colonSplit[0];
             // Register
             if (command.equals("register") && master == null && toBeConfirmedSlaves.isEmpty()
                 && slaves.isEmpty() && canSeePlayer(sender)) {
                 master = sender;
                 SlaveSystem.queueMasterDM("accept");
             }
-            // Master to client message
+            // Master to Client message
             if (sender.equals(master)) {
                 switch (command) {
                     case "interval":
-                        if (colonSplit.length < 4) break;
-                        Pair<Integer, Integer> interval = new Pair<>(Integer.valueOf(colonSplit[2]), Integer.valueOf(colonSplit[3]));
+                        if (colonSplit.length < 3) break;
+                        Pair<Integer, Integer> interval = new Pair<>(Integer.valueOf(colonSplit[1]), Integer.valueOf(colonSplit[2]));
                         printerModule.setInterval(interval);
                         break;
                     case "pause":
@@ -192,7 +199,7 @@ public class SlaveSystem {
                         break;
                 }
             }
-            // Client to master message
+            // Client to Master message
             if (slaves.contains(sender) || toBeConfirmedSlaves.contains(sender)) {
                 switch (command) {
                     case "accept":
@@ -210,8 +217,8 @@ public class SlaveSystem {
                         if (tableController != null) tableController.rebuild();
                         break;
                     case "error":
-                        if (colonSplit.length < 4) break;
-                        BlockPos relativeErrorPos = new BlockPos(Integer.valueOf(colonSplit[2]), 0, Integer.valueOf(colonSplit[3]));
+                        if (colonSplit.length < 3) break;
+                        BlockPos relativeErrorPos = new BlockPos(Integer.valueOf(colonSplit[1]), 0, Integer.valueOf(colonSplit[2]));
                         printerModule.addError(relativeErrorPos);
                         break;
                 }
