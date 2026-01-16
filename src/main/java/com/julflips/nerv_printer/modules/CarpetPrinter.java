@@ -405,53 +405,6 @@ public class CarpetPrinter extends Module {
     }
 
     @Override
-    public WWidget getWidget(GuiTheme theme) {
-        WVerticalList list = theme.verticalList();
-        WTable table = new WTable();
-        list.add(table);
-
-        if (!isActive()) {
-            table.add(theme.label("Module has to be enabled for this feature."));
-            table.row();
-            return list;
-        }
-
-        File configFolder = new File(mapFolder, "_configs");
-        if (!configFolder.exists()) return table;
-
-        table.add(theme.label("Configurations: "));
-        // ---- Save config button ----
-        WButton saveButton = table.add(theme.button("Save Config")).widget();
-        saveButton.action = () -> {
-            String path = TinyFileDialogs.tinyfd_saveFileDialog(
-                "Save Config",
-                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
-                null,
-                null
-            );
-            if (path != null) saveConfig(new File(path));
-        };
-
-        // ---- Load config button ----
-        WButton loadButton = table.add(theme.button("Load Config")).widget();
-        loadButton.action = () -> {
-            String path = TinyFileDialogs.tinyfd_openFileDialog(
-                "Load Config",
-                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
-                null,
-                null,
-                false
-            );
-            if (path != null) loadConfig(new File(path));
-        };
-        table.row();
-
-        SlaveSystem.getSlaveUI(theme, table);
-
-        return list;
-    }
-
-    @Override
     public void onActivate() {
         lastTickTime = System.currentTimeMillis();
         if (!activationReset.get() && checkpoints != null) {
@@ -483,6 +436,7 @@ public class CarpetPrinter extends Module {
         toBeSwappedSlot = -1;
         oldState = null;
 
+        setInterval(new Pair<>(0, 127));
         // Initialize Slave System settings
         SlaveSystem.setupSlaveSystem(this, commandDelay.get(), directMessageCommand.get());
 
@@ -572,7 +526,6 @@ public class CarpetPrinter extends Module {
                         return;
                     }
 
-                    SlaveSystem.generateIntervals(map.length);
                     startBuilding();
                 }
                 break;
@@ -752,7 +705,7 @@ public class CarpetPrinter extends Module {
     private void onTick(TickEvent.Pre event) {
         if (state == null) return;
 
-        if (state.equals(State.AwaitContinue)) {
+        if (state.equals(State.AwaitSlaveContinue)) {
             if (!SlaveSystem.isSlave() && SlaveSystem.allSlavesFinished()) {
                 endBuilding();
             } else {
@@ -967,7 +920,7 @@ public class CarpetPrinter extends Module {
             if (checkpoints.size() == 0) {
                 if (SlaveSystem.isSlave()) {
                     SlaveSystem.queueMasterDM("finished");
-                    state = State.AwaitContinue;
+                    state = State.AwaitSlaveNextMap;
                     Utils.setForwardPressed(false);
                     return;
                 }
@@ -975,7 +928,7 @@ public class CarpetPrinter extends Module {
                     endBuilding();
                 } else {
                     info("Waiting for slaves to finish...");
-                    state = State.AwaitContinue;
+                    state = State.AwaitSlaveContinue;
                     Utils.setForwardPressed(false);
                     return;
                 }
@@ -1214,7 +1167,7 @@ public class CarpetPrinter extends Module {
     }
 
     private void startBuilding() {
-        if (!SlaveSystem.isSlave()) SlaveSystem.sendToAllSlaves("start");
+        if (!SlaveSystem.isSlave()) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         calculateBuildingPath(true, true);
         HashMap<Item, Integer> requiredItems = Utils.getRequiredItems(mapCorner, workingInterval, linesPerRun.get(), availableSlots.size(), map);
@@ -1259,7 +1212,7 @@ public class CarpetPrinter extends Module {
         state = State.Walking;
         workingInterval = trueInterval;
         knownErrors.clear();
-        SlaveSystem.finishedSlaves.clear();
+        SlaveSystem.setAllSlavesUnfinished();
         Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
         if (bestChest == null) return;
         checkpoints.add(0, new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
@@ -1337,19 +1290,18 @@ public class CarpetPrinter extends Module {
         if (!knownErrors.contains(absoluteErrorPos)) knownErrors.add(absoluteErrorPos);
     }
 
-    public void startNextMap() {
-        state = State.AwaitNBTFile;
-    }
-
     public void pause() {
-        if (!state.equals(CarpetPrinter.State.AwaitContinue)) {
+        if (!state.equals(CarpetPrinter.State.AwaitSlaveContinue)) {
             oldState = state;
-            state = CarpetPrinter.State.AwaitContinue;
+            state = CarpetPrinter.State.AwaitSlaveContinue;
             Utils.setForwardPressed(false);
         }
     }
 
-    public void resume() {
+    public void start() {
+        if (availableSlots.isEmpty() || state.equals(State.AwaitSlaveNextMap)) {
+            state = State.AwaitNBTFile;
+        }
         if (oldState != null) {
             state = oldState;
             oldState = null;
@@ -1506,6 +1458,53 @@ public class CarpetPrinter extends Module {
     // Rendering
 
     @Override
+    public WWidget getWidget(GuiTheme theme) {
+        System.out.println("Using theme1: " + theme);
+        WVerticalList list = theme.verticalList();
+        WTable table = new WTable();
+        list.add(table);
+
+        File configFolder = new File(mapFolder, "_configs");
+        if (!configFolder.exists()) return table;
+
+        table.add(theme.label("Configurations: "));
+        // ---- Save config button ----
+        WButton saveButton = table.add(theme.button("Save Config")).widget();
+        saveButton.action = () -> {
+            String path = TinyFileDialogs.tinyfd_saveFileDialog(
+                "Save Config",
+                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
+                null,
+                null
+            );
+            if (path != null) saveConfig(new File(path));
+        };
+
+        // ---- Load config button ----
+        WButton loadButton = table.add(theme.button("Load Config")).widget();
+        loadButton.action = () -> {
+            String path = TinyFileDialogs.tinyfd_openFileDialog(
+                "Load Config",
+                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
+                null,
+                null,
+                false
+            );
+            if (path != null) loadConfig(new File(path));
+        };
+        table.row();
+
+        WTable slaveTable = new WTable();
+        list.add(slaveTable);
+
+        SlaveTableController slaveController = new SlaveTableController(slaveTable, theme);
+        slaveController.rebuild();
+
+        SlaveSystem.tableController = slaveController;
+        return list;
+    }
+
+    @Override
     public String getInfoString() {
         if (mapFile != null) {
             return mapFile.getName();
@@ -1578,7 +1577,8 @@ public class CarpetPrinter extends Module {
         AwaitBlockBreak,
         AwaitAreaClear,
         AwaitNBTFile,
-        AwaitContinue,
+        AwaitSlaveContinue,
+        AwaitSlaveNextMap,
         Walking,
         Dumping
     }

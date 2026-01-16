@@ -3,9 +3,6 @@ package com.julflips.nerv_printer.utils;
 import com.julflips.nerv_printer.modules.CarpetPrinter;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.gui.GuiTheme;
-import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
-import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
@@ -16,6 +13,7 @@ import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
@@ -23,11 +21,13 @@ public class SlaveSystem {
 
     public static int commandDelay = 0;
     public static String directMessageCommand = "w";
-    public static ArrayList<String> finishedSlaves = new ArrayList<>();
+    public static ArrayList<String> slaves = new ArrayList<>();
+    public static HashMap<String, Boolean> activeSlavesDict = new HashMap<>();
+    public static SlaveTableController tableController = null;
 
     private static CarpetPrinter printerModule = null;
     private static int timeout = 0;
-    private static ArrayList<String> slaves = new ArrayList<>();
+    private static HashMap<String, Boolean> finishedSlavesDict = new HashMap<>();
     private static ArrayList<String> toBeSentMessages = new ArrayList<>();
     private static ArrayList<String> toBeConfirmedSlaves = new ArrayList<>();
     private static String master = null;
@@ -39,7 +39,8 @@ public class SlaveSystem {
         slaves.clear();
         toBeSentMessages.clear();
         toBeConfirmedSlaves.clear();
-        finishedSlaves.clear();
+        activeSlavesDict.clear();
+        finishedSlavesDict.clear();
         master = null;
     }
 
@@ -54,7 +55,16 @@ public class SlaveSystem {
     }
 
     public static boolean allSlavesFinished() {
-        return finishedSlaves.size() == slaves.size();
+        for (String slave : finishedSlavesDict.keySet()) {
+            if (!finishedSlavesDict.get(slave)) return false;
+        }
+        return true;
+    }
+
+    public static void setAllSlavesUnfinished() {
+        for (String slave : finishedSlavesDict.keySet()) {
+            finishedSlavesDict.put(slave, false);
+        }
     }
 
     public static boolean isSlave() {
@@ -67,36 +77,49 @@ public class SlaveSystem {
         }
     }
 
-    public static void generateIntervals(int totalSize) {
-        int sectionSize = (int) Math.ceil((float) totalSize / (float) (slaves.size()+1));
+    public static void startAllSlaves() {
+        for (String slave : activeSlavesDict.keySet()) {
+            if (!activeSlavesDict.get(slave)) {
+                queueDM(slave, "start");
+                activeSlavesDict.put(slave, true);
+            }
+        }
+        if (!printerModule.isActive()) printerModule.toggle();
+    }
+
+    public static void pauseAllSlaves() {
+        sendToAllSlaves("pause");
+        for (String slave : activeSlavesDict.keySet()) {
+            activeSlavesDict.put(slave, false);
+        }
+        if (printerModule.isActive()) printerModule.toggle();
+    }
+
+    public static void generateIntervals() {
+        int sectionSize = (int) Math.ceil((float) 128 / (float) (slaves.size()+1));
         ArrayList<Pair<Integer, Integer>> intervals = new ArrayList<>();
-        for (int end = totalSize-1; end >= 0 ; end -= sectionSize) {
+        for (int end = 127; end >= 0 ; end -= sectionSize) {
             int start = Math.max(0, end - sectionSize + 1);
             intervals.add(new Pair<>(start, end));
         }
         Collections.reverse(intervals);
 
         printerModule.setInterval(intervals.remove((intervals.size()-1)/2));
+
+        // Remove all previously queued interval messages
+        ArrayList<String> toBeRemoved = new ArrayList<>();
+        for (String message : toBeSentMessages) {
+            if (message.startsWith("interval")) toBeRemoved.add(message);
+        }
+        toBeRemoved.forEach((message) -> toBeSentMessages.remove(message));
+
         for (int i = 0; i < intervals.size(); i++) {
             String slave = slaves.get(i);
             SlaveSystem.queueDM(slave, "interval:" + intervals.get(i).getLeft() + ":" + intervals.get(i).getRight());
         }
     }
 
-    public static void getSlaveUI(GuiTheme theme, WTable table) {
-        table.add(theme.label("Multi-User: "));
-        WButton startButton = table.add(theme.button("Register players in range")).widget();
-        startButton.action = () -> registerSlaves();
-
-        WButton pauseButton = table.add(theme.button("Pause all")).widget();
-        pauseButton.action = () -> sendToAllSlaves("pause");
-
-        WButton continueButton = table.add(theme.button("Continue all")).widget();
-        continueButton.action = () -> sendToAllSlaves("continue");
-        table.row();
-    }
-
-    private static void registerSlaves() {
+    public static void registerSlaves() {
         if (printerModule == null) {
             ChatUtils.warning("The module needs to be enabled to register new slaves.");
             return;
@@ -117,7 +140,14 @@ public class SlaveSystem {
         }
     }
 
-    private static boolean canSeePlayer(String playerName) {
+    public static void removeSlave(String slave) {
+        slaves.remove(slave);
+        activeSlavesDict.remove(slave);
+        finishedSlavesDict.remove(slave);
+        queueDM(slave, "remove");
+    }
+
+    public static boolean canSeePlayer(String playerName) {
         for(Entity entity : mc.world.getEntities()) {
             if (entity instanceof PlayerEntity player && player.getName().getString().equals(playerName)) {
                 return true;
@@ -150,17 +180,15 @@ public class SlaveSystem {
                         Pair<Integer, Integer> interval = new Pair<>(Integer.valueOf(colonSplit[2]), Integer.valueOf(colonSplit[3]));
                         printerModule.setInterval(interval);
                         break;
-                    case "start":
-                        printerModule.startNextMap();
-                        break;
-                    case "remove":
-                        printerModule.toggle();
-                        break;
                     case "pause":
                         printerModule.pause();
                         break;
-                    case "continue":
-                        printerModule.resume();
+                    case "start":
+                        printerModule.start();
+                        break;
+                    case "remove":
+                        master = null;
+                        printerModule.toggle();
                         break;
                 }
             }
@@ -169,11 +197,17 @@ public class SlaveSystem {
                 switch (command) {
                     case "accept":
                         slaves.add(sender);
+                        finishedSlavesDict.put(sender, false);
+                        activeSlavesDict.put(sender, false);
                         toBeConfirmedSlaves.remove(sender);
                         ChatUtils.info("Registered slave: " + sender + " Total slaves: " + slaves.size());
+                        generateIntervals();
+                        if (tableController != null) tableController.rebuild();
                         break;
                     case "finished":
-                        finishedSlaves.add(sender);
+                        finishedSlavesDict.put(sender, true);
+                        activeSlavesDict.put(sender, false);
+                        if (tableController != null) tableController.rebuild();
                         break;
                     case "error":
                         if (colonSplit.length < 4) break;
