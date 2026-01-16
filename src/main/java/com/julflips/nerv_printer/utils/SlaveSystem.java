@@ -7,10 +7,12 @@ import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.network.packet.s2c.play.ChatMessageS2CPacket;
 import net.minecraft.network.packet.s2c.play.GameMessageS2CPacket;
 import net.minecraft.util.Pair;
 import net.minecraft.util.math.BlockPos;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -160,69 +162,85 @@ public class SlaveSystem {
         return false;
     }
 
-    @EventHandler
-    private static void onReceivePacket(PacketEvent.Receive event) {
-        if (printerModule != null && event.packet instanceof GameMessageS2CPacket packet) {
-            String rawMessage = packet.content().getString();
+    private static void handleMessage(String rawMessage, @Nullable String sender) {
+        String content;
+        // Extract sender from message if not provided in packet
+        if (sender != null) {
+            content = rawMessage;
+        } else {
             int prefixIndex = rawMessage.indexOf(senderPrefix);
             int suffixIndex = rawMessage.indexOf(senderSuffix);
             if (prefixIndex == -1 || suffixIndex == -1) return;
 
-            String sender = rawMessage.substring(prefixIndex + senderPrefix.length(), suffixIndex);
+            sender = rawMessage.substring(prefixIndex + senderPrefix.length(), suffixIndex);
             if (sender == mc.player.getName().getString()) return;
-            String content = rawMessage.substring(suffixIndex + senderSuffix.length());
-            String[] colonSplit = content.replace(" ", "").split(":");
-            String command = colonSplit[0];
-            // Register
-            if (command.equals("register") && master == null && toBeConfirmedSlaves.isEmpty()
-                && slaves.isEmpty() && canSeePlayer(sender)) {
-                master = sender;
-                SlaveSystem.queueMasterDM("accept");
+            content = rawMessage.substring(suffixIndex + senderSuffix.length());
+        }
+
+        String[] colonSplit = content.replace(" ", "").split(":");
+        String command = colonSplit[0];
+        // Register
+        if (command.equals("register") && master == null && toBeConfirmedSlaves.isEmpty()
+            && slaves.isEmpty() && canSeePlayer(sender)) {
+            master = sender;
+            SlaveSystem.queueMasterDM("accept");
+        }
+        // Master to Client message
+        if (sender.equals(master)) {
+            switch (command) {
+                case "interval":
+                    if (colonSplit.length < 3) break;
+                    Pair<Integer, Integer> interval = new Pair<>(Integer.valueOf(colonSplit[1]), Integer.valueOf(colonSplit[2]));
+                    printerModule.setInterval(interval);
+                    break;
+                case "pause":
+                    printerModule.pause();
+                    break;
+                case "start":
+                    printerModule.start();
+                    break;
+                case "remove":
+                    master = null;
+                    printerModule.toggle();
+                    break;
             }
-            // Master to Client message
-            if (sender.equals(master)) {
-                switch (command) {
-                    case "interval":
-                        if (colonSplit.length < 3) break;
-                        Pair<Integer, Integer> interval = new Pair<>(Integer.valueOf(colonSplit[1]), Integer.valueOf(colonSplit[2]));
-                        printerModule.setInterval(interval);
-                        break;
-                    case "pause":
-                        printerModule.pause();
-                        break;
-                    case "start":
-                        printerModule.start();
-                        break;
-                    case "remove":
-                        master = null;
-                        printerModule.toggle();
-                        break;
-                }
+        }
+        // Client to Master message
+        if (slaves.contains(sender) || toBeConfirmedSlaves.contains(sender)) {
+            switch (command) {
+                case "accept":
+                    slaves.add(sender);
+                    finishedSlavesDict.put(sender, false);
+                    activeSlavesDict.put(sender, false);
+                    toBeConfirmedSlaves.remove(sender);
+                    ChatUtils.info("Registered slave: " + sender + " Total slaves: " + slaves.size());
+                    generateIntervals();
+                    if (tableController != null) tableController.rebuild();
+                    break;
+                case "finished":
+                    finishedSlavesDict.put(sender, true);
+                    activeSlavesDict.put(sender, false);
+                    if (tableController != null) tableController.rebuild();
+                    break;
+                case "error":
+                    if (colonSplit.length < 3) break;
+                    BlockPos relativeErrorPos = new BlockPos(Integer.valueOf(colonSplit[1]), 0, Integer.valueOf(colonSplit[2]));
+                    printerModule.addError(relativeErrorPos);
+                    break;
             }
-            // Client to Master message
-            if (slaves.contains(sender) || toBeConfirmedSlaves.contains(sender)) {
-                switch (command) {
-                    case "accept":
-                        slaves.add(sender);
-                        finishedSlavesDict.put(sender, false);
-                        activeSlavesDict.put(sender, false);
-                        toBeConfirmedSlaves.remove(sender);
-                        ChatUtils.info("Registered slave: " + sender + " Total slaves: " + slaves.size());
-                        generateIntervals();
-                        if (tableController != null) tableController.rebuild();
-                        break;
-                    case "finished":
-                        finishedSlavesDict.put(sender, true);
-                        activeSlavesDict.put(sender, false);
-                        if (tableController != null) tableController.rebuild();
-                        break;
-                    case "error":
-                        if (colonSplit.length < 3) break;
-                        BlockPos relativeErrorPos = new BlockPos(Integer.valueOf(colonSplit[1]), 0, Integer.valueOf(colonSplit[2]));
-                        printerModule.addError(relativeErrorPos);
-                        break;
-                }
-            }
+        }
+    }
+
+    @EventHandler
+    private static void onReceivePacket(PacketEvent.Receive event) {
+        if (printerModule == null) return;
+
+        if (event.packet instanceof ChatMessageS2CPacket packet) {
+            handleMessage(packet.body().content(), packet.serializedParameters().name().getString());
+        }
+
+        if (event.packet instanceof GameMessageS2CPacket packet) {
+            handleMessage(packet.content().getString(), null);
         }
     }
 
