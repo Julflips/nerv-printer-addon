@@ -843,9 +843,8 @@ public class CarpetPrinter extends Module {
         if (!state.equals(State.Walking)) return;
         Utils.setForwardPressed(true);
         if (checkpoints.isEmpty()) {
-            error("Checkpoints are empty. Stopping...");
-            toggle();
-            return;
+            // Creating fallback checkpoint
+            checkpoints.add(new Pair(mc.player.getPos(), new Pair<>("lineEnd", null)));
         }
         Vec3d goal = checkpoints.get(0).getLeft();
         if (PlayerUtils.distanceTo(goal.add(0, mc.player.getY() - goal.y, 0)) < checkpointBuffer.get()) {
