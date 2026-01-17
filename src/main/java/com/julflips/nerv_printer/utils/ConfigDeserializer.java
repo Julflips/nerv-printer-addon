@@ -18,7 +18,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class ConfigDeserializer {
+public final class ConfigDeserializer {
 
     private static BlockPos jsonToBlockPos(JsonObject obj) {
         return new BlockPos(

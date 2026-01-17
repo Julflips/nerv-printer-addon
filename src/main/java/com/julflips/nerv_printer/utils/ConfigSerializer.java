@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ConfigSerializer {
+public final class ConfigSerializer {
 
     private static JsonObject blockPosToJson(BlockPos pos) {
         JsonObject obj = new JsonObject();

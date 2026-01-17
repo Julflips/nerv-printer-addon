@@ -7,7 +7,7 @@ import net.minecraft.registry.tag.ItemTags;
 
 import java.util.Set;
 
-public class ToolUtils {
+public final class ToolUtils {
 
     public static ItemStack getBestTool(Set<ItemStack> tools, BlockState targetBlock) {
         float bestScore = -Float.MAX_VALUE;

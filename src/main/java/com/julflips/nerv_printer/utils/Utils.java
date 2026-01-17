@@ -10,8 +10,6 @@ import meteordevelopment.orbit.EventPriority;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
@@ -33,7 +31,7 @@ import java.util.function.BiConsumer;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
-public class Utils {
+public final class Utils {
 
     private static int nextInteractID = 2;
 

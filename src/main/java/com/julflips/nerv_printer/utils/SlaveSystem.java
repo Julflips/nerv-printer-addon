@@ -19,7 +19,7 @@ import java.util.HashMap;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
-public class SlaveSystem {
+public final class SlaveSystem {
 
     public static int commandDelay = 0;
     public static String directMessageCommand = "w";
@@ -115,7 +115,7 @@ public class SlaveSystem {
         // Remove all previously queued interval messages
         ArrayList<String> toBeRemoved = new ArrayList<>();
         for (String message : toBeSentMessages) {
-            if (message.startsWith("interval")) toBeRemoved.add(message);
+            if (message.contains("interval")) toBeRemoved.add(message);
         }
         toBeRemoved.forEach((message) -> toBeSentMessages.remove(message));
 

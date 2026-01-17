@@ -14,7 +14,7 @@ import java.util.Map;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
-public class MapAreaCache {
+public final class MapAreaCache {
     private static BlockPos mapCorner = null;
     private static Map<ChunkPos, Chunk> cachedChunks = new HashMap<>();
 
