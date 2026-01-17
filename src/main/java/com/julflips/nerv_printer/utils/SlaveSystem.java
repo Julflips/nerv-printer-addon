@@ -90,7 +90,7 @@ public class SlaveSystem {
                 activeSlavesDict.put(slave, true);
             }
         }
-        if (!printerModule.isActive()) printerModule.toggle();
+        if (!printerModule.isActive() && !printerModule.activationReset.get()) printerModule.toggle();
     }
 
     public static void pauseAllSlaves() {
@@ -98,7 +98,7 @@ public class SlaveSystem {
         for (String slave : activeSlavesDict.keySet()) {
             activeSlavesDict.put(slave, false);
         }
-        if (printerModule.isActive()) printerModule.toggle();
+        if (printerModule.isActive() && !printerModule.activationReset.get()) printerModule.toggle();
     }
 
     public static void generateIntervals() {

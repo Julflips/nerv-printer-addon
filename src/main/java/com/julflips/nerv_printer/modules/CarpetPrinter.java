@@ -129,7 +129,7 @@ public class CarpetPrinter extends Module {
         .build()
     );
 
-    private final Setting<Boolean> activationReset = sgGeneral.add(new BoolSetting.Builder()
+    public final Setting<Boolean> activationReset = sgGeneral.add(new BoolSetting.Builder()
         .name("activation-reset")
         .description("Resets all values when module is activated or the client relogs. Disable to be able to pause.")
         .defaultValue(true)
@@ -294,7 +294,7 @@ public class CarpetPrinter extends Module {
     private final Setting<String> senderSuffix = sgMultiUser.add(new StringSetting.Builder()
         .name("sender-suffix")
         .description("The text that is always between the name of the sender and the actual message.")
-        .defaultValue(" whispers to you: ")
+        .defaultValue(" whispers: ")
         .onChanged((value) -> SlaveSystem.senderSuffix = value)
         .build()
     );
