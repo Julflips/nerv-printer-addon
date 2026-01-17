@@ -20,6 +20,8 @@ Semi-automatically names unnamed map items in inventory. Pauses on anvil break a
 - 8b8t
 - EndCrystal
 - MineTexas
+- 2B2FR
+- FBFT
 
 ## Mapart Gallery
 A collection of maps printed with this addon:
