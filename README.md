@@ -17,6 +17,9 @@ Semi-automatically names unnamed map items in inventory. Pauses on anvil break a
 ## Verified on Servers
 - Contantiam (Folia with Grim anti-cheat)
 - 6b6t
+- 8b8t
+- EndCrystal
+- MineTexas
 
 ## Mapart Gallery
 A collection of maps printed with this addon:
