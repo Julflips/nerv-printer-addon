@@ -20,11 +20,12 @@ public final class SlaveTableController {
     public void rebuild() {
         table.clear();
 
-        /*if (printerModule == null || !printerModule.isActive()) {
-            table.add(theme.label("Module has to be enabled for this feature."));
+        if (SlaveSystem.isSlave()) {
+            table.add(theme.label("Slave user can not control other slaves."));
             table.row();
             return;
-        }*/
+        }
+
 
         table.add(theme.label("Multi-User: "));
 
