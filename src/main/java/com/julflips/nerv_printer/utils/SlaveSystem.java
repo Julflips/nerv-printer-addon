@@ -253,7 +253,7 @@ public final class SlaveSystem {
         if (!toBeSentMessages.isEmpty()) {
             if (timeout <= 0) {
                 String message = toBeSentMessages.remove(0);
-                message += UUID.randomUUID().toString().substring(0, randomLength);
+                message += ":" + UUID.randomUUID().toString().substring(0, randomLength);
                 mc.getNetworkHandler().sendChatCommand(message);
                 timeout = commandDelay;
             }
