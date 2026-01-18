@@ -16,6 +16,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.UUID;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
@@ -25,6 +26,7 @@ public final class SlaveSystem {
     public static String directMessageCommand = "w";
     public static String senderPrefix = "";
     public static String senderSuffix = "";
+    public static int randomLength = 0;
     public static ArrayList<String> slaves = new ArrayList<>();
     public static HashMap<String, Boolean> activeSlavesDict = new HashMap<>();
     public static SlaveTableController tableController = null;
@@ -36,12 +38,13 @@ public final class SlaveSystem {
     private static ArrayList<String> toBeConfirmedSlaves = new ArrayList<>();
     private static String master = null;
 
-    public static void setupSlaveSystem(CarpetPrinter module, int delay, String dmCommand, String prefix, String suffix) {
+    public static void setupSlaveSystem(CarpetPrinter module, int delay, String dmCommand, String prefix, String suffix, int randomSuffixLength) {
         printerModule = module;
         commandDelay = delay;
         directMessageCommand = dmCommand;
         senderPrefix = prefix;
         senderSuffix = suffix;
+        randomLength = randomSuffixLength;
         slaves.clear();
         toBeSentMessages.clear();
         toBeConfirmedSlaves.clear();
@@ -249,7 +252,9 @@ public final class SlaveSystem {
         if (timeout > 0) timeout--;
         if (!toBeSentMessages.isEmpty()) {
             if (timeout <= 0) {
-                mc.getNetworkHandler().sendChatCommand(toBeSentMessages.remove(0));
+                String message = toBeSentMessages.remove(0);
+                message += UUID.randomUUID().toString().substring(0, randomLength);
+                mc.getNetworkHandler().sendChatCommand(message);
                 timeout = commandDelay;
             }
         }

@@ -309,6 +309,17 @@ public class CarpetPrinter extends Module {
         .build()
     );
 
+    private final Setting<Integer> randomSuffix = sgAdvanced.add(new IntSetting.Builder()
+        .name("random-suffix-length")
+        .description("Generate a randomized suffix to circumvent anti-spam plugins.")
+        .defaultValue(0)
+        .min(0)
+        .max(36)
+        .sliderRange(0, 10)
+        .onChanged((value) -> SlaveSystem.randomLength = value)
+        .build()
+    );
+
     //Error Handling
 
     private final Setting<Boolean> logErrors = sgError.add(new BoolSetting.Builder()
@@ -457,7 +468,7 @@ public class CarpetPrinter extends Module {
 
         setInterval(new Pair<>(0, 127));
         // Initialize Slave System settings
-        SlaveSystem.setupSlaveSystem(this, commandDelay.get(), directMessageCommand.get(), senderPrefix.get(), senderSuffix.get());
+        SlaveSystem.setupSlaveSystem(this, commandDelay.get(), directMessageCommand.get(), senderPrefix.get(), senderSuffix.get(), randomSuffix.get());
 
         if (!customFolderPath.get()) {
             mapFolder = new File(Utils.getMinecraftDirectory(), "nerv-printer");
