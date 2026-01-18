@@ -309,7 +309,7 @@ public class CarpetPrinter extends Module {
         .build()
     );
 
-    private final Setting<Integer> randomSuffix = sgAdvanced.add(new IntSetting.Builder()
+    private final Setting<Integer> randomSuffix = sgMultiUser.add(new IntSetting.Builder()
         .name("random-suffix-length")
         .description("Generate a randomized suffix to circumvent anti-spam plugins.")
         .defaultValue(0)
