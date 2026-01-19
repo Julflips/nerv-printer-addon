@@ -1,6 +1,6 @@
 package com.julflips.nerv_printer.utils;
 
-import com.julflips.nerv_printer.mixininterfaces.IClientPlayerInteractionManager;
+import com.julflips.nerv_printer.interfaces.IClientPlayerInteractionManager;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.utils.misc.input.Input;

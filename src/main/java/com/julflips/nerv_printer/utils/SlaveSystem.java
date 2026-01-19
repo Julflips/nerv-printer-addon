@@ -1,6 +1,6 @@
 package com.julflips.nerv_printer.utils;
 
-import com.julflips.nerv_printer.modules.CarpetPrinter;
+import com.julflips.nerv_printer.interfaces.MapPrinter;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
@@ -31,14 +31,14 @@ public final class SlaveSystem {
     public static HashMap<String, Boolean> activeSlavesDict = new HashMap<>();
     public static SlaveTableController tableController = null;
 
-    private static CarpetPrinter printerModule = null;
+    private static MapPrinter printerModule = null;
     private static int timeout = 0;
     private static HashMap<String, Boolean> finishedSlavesDict = new HashMap<>();
     private static ArrayList<String> toBeSentMessages = new ArrayList<>();
     private static ArrayList<String> toBeConfirmedSlaves = new ArrayList<>();
     private static String master = null;
 
-    public static void setupSlaveSystem(CarpetPrinter module, int delay, String dmCommand, String prefix, String suffix, int randomSuffixLength) {
+    public static void setupSlaveSystem(MapPrinter module, int delay, String dmCommand, String prefix, String suffix, int randomSuffixLength) {
         printerModule = module;
         commandDelay = delay;
         directMessageCommand = dmCommand;
@@ -93,7 +93,7 @@ public final class SlaveSystem {
                 activeSlavesDict.put(slave, true);
             }
         }
-        if (!printerModule.isActive() && !printerModule.activationReset.get()) printerModule.toggle();
+        if (!printerModule.isActive() && !printerModule.getActivationReset()) printerModule.toggle();
     }
 
     public static void pauseAllSlaves() {
@@ -101,7 +101,7 @@ public final class SlaveSystem {
         for (String slave : activeSlavesDict.keySet()) {
             activeSlavesDict.put(slave, false);
         }
-        if (printerModule.isActive() && !printerModule.activationReset.get()) printerModule.toggle();
+        if (printerModule.isActive() && !printerModule.getActivationReset()) printerModule.toggle();
     }
 
     public static void generateIntervals() {

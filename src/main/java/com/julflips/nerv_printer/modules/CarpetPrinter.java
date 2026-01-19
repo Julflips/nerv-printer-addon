@@ -1,6 +1,7 @@
 package com.julflips.nerv_printer.modules;
 
 import com.julflips.nerv_printer.Addon;
+import com.julflips.nerv_printer.interfaces.MapPrinter;
 import com.julflips.nerv_printer.utils.*;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
@@ -54,7 +55,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class CarpetPrinter extends Module {
+public class CarpetPrinter extends Module implements MapPrinter {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgAdvanced = settings.createGroup("Advanced",  false);
     private final SettingGroup sgMultiUser = settings.createGroup("Multi User", false);
@@ -1306,7 +1307,7 @@ public class CarpetPrinter extends Module {
         mc.interactionManager.clickSlot(packet.syncId(), sourceSlot, 0, SlotActionType.PICKUP, mc.player);
     }
 
-    // Slave Logic
+    // MapPrinter Interface for Slave Logic
 
     public void setInterval(Pair<Integer, Integer> interval) {
         info("Set interval to: " + interval.getLeft() + " - " + interval.getRight());
@@ -1337,7 +1338,11 @@ public class CarpetPrinter extends Module {
         }
     }
 
-    // Utility
+    public boolean getActivationReset() {
+        return activationReset.get();
+    }
+
+    // Path Change Check
 
     private void warnPathChanged() {
         if (checkpoints != null && !activationReset.get()) {

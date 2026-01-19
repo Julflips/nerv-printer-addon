@@ -1,4 +1,4 @@
-package com.julflips.nerv_printer.mixininterfaces;
+package com.julflips.nerv_printer.interfaces;
 
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.screen.slot.SlotActionType;

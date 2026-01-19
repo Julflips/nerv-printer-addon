@@ -1,7 +1,7 @@
 package com.julflips.nerv_printer.modules;
 
 import com.julflips.nerv_printer.Addon;
-import com.julflips.nerv_printer.mixininterfaces.IClientPlayerInteractionManager;
+import com.julflips.nerv_printer.interfaces.IClientPlayerInteractionManager;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.utils.StarscriptTextBoxRenderer;
