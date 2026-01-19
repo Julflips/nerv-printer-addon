@@ -1,13 +1,16 @@
 package com.julflips.nerv_printer.modules;
 
 import com.julflips.nerv_printer.Addon;
-import com.julflips.nerv_printer.utils.MapAreaCache;
-import com.julflips.nerv_printer.utils.ToolUtils;
-import com.julflips.nerv_printer.utils.Utils;
+import com.julflips.nerv_printer.utils.*;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.utils.StarscriptTextBoxRenderer;
+import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -27,6 +30,10 @@ import net.minecraft.network.packet.c2s.play.*;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Pair;
 import net.minecraft.util.hit.BlockHitResult;
@@ -36,8 +43,10 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import org.apache.commons.lang3.tuple.Triple;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 public class StaircasedPrinter extends Module {
@@ -354,9 +363,9 @@ public class StaircasedPrinter extends Module {
     boolean closeNextInvPacket;
     State state;
     State oldState;
-    Pair<BlockHitResult, Vec3d> usedToolChest;
-    Pair<BlockHitResult, Vec3d> cartographyTable;
-    Pair<BlockHitResult, Vec3d> finishedMapChest;
+    Pair<BlockPos, Vec3d> usedToolChest;
+    Pair<BlockPos, Vec3d> cartographyTable;
+    Pair<BlockPos, Vec3d> finishedMapChest;
     ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests;
     Pair<Vec3d, Pair<Float, Float>> dumpStation;                    //Pos, Yaw, Pitch
     BlockPos mapCorner;
@@ -635,7 +644,7 @@ public class StaircasedPrinter extends Module {
             case SelectingTable:
                 BlockPos blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock().equals(Blocks.CARTOGRAPHY_TABLE)) {
-                    cartographyTable = new Pair<>(packet.getBlockHitResult(), mc.player.getPos());
+                    cartographyTable = new Pair<>(blockPos, mc.player.getPos());
                     info("Cartography Table selected. Throw an item into the §aDump Station.");
                     state = State.SelectingDumpStation;
                 }
@@ -643,7 +652,7 @@ public class StaircasedPrinter extends Module {
             case SelectingFinishedMapChest:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof AbstractChestBlock) {
-                    finishedMapChest = new Pair<>(packet.getBlockHitResult(), mc.player.getPos());
+                    finishedMapChest = new Pair<>(blockPos, mc.player.getPos());
                     info("Finished Map Chest selected. Select the §aUsed Pickaxe Chest.");
                     state = State.SelectingUsedPickaxeChest;
                 }
@@ -651,7 +660,7 @@ public class StaircasedPrinter extends Module {
             case SelectingUsedPickaxeChest:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof AbstractChestBlock) {
-                    usedToolChest = new Pair<>(packet.getBlockHitResult(), mc.player.getPos());
+                    usedToolChest = new Pair<>(blockPos, mc.player.getPos());
                     info("Used Pickaxe Chest selected. Select all §aMaterial-, Tool-, and Map-Chests.");
                     state = State.SelectingChests;
                 }
@@ -1067,7 +1076,7 @@ public class StaircasedPrinter extends Module {
                     return;
                 case "finishedMapChest":
                     state = State.AwaitFinishedMapChestResponse;
-                    interactWithBlock(finishedMapChest.getLeft().getBlockPos());
+                    interactWithBlock(finishedMapChest.getLeft());
                     return;
                 case "dump":
                     state = State.Dumping;
@@ -1095,7 +1104,7 @@ public class StaircasedPrinter extends Module {
                     break;
                 case "usedToolChest":
                     state = State.AwaitUsedToolChestResponse;
-                    interactWithBlock(usedToolChest.getLeft().getBlockPos());
+                    interactWithBlock(usedToolChest.getLeft());
                     return;
             }
             if (checkpoints.size() == 0) {
@@ -1299,15 +1308,6 @@ public class StaircasedPrinter extends Module {
         lastInteractedChest = chestPos;
     }
 
-    private void interactWithBlock(BlockHitResult hitResult) {
-        Utils.setForwardPressed(false);
-        mc.player.setVelocity(0, 0, 0);
-        mc.player.setYaw((float) Rotations.getYaw(hitResult.getBlockPos().toCenterPos()));
-        mc.player.setPitch((float) Rotations.getPitch(hitResult.getBlockPos().toCenterPos()));
-        BlockUtils.interact(hitResult, Hand.MAIN_HAND, true);
-        interactTimeout = retryInteractTimer.get();
-    }
-
     private Item getMaterialFromPos(BlockPos pos) {
         for (Item item : materialDict.keySet()) {
             for (Pair<BlockPos, Vec3d> p : materialDict.get(item)) {
@@ -1317,54 +1317,6 @@ public class StaircasedPrinter extends Module {
         warning("Could not find material for chest position : " + pos.toShortString());
         toggle();
         return null;
-    }
-
-    private boolean prepareNextMapFile() {
-        mapFile = Utils.getNextMapFile(mapFolder, startedFiles, moveToFinishedFolder.get());
-
-        if (mapFile == null) {
-            if (disableOnFinished.get()) {
-                info("All nbt files finished");
-                toggle();
-                return false;
-            } else {
-                return false;
-            }
-        }
-        if (!loadNBTFile()) {
-            warning("Failed to read nbt file.");
-            toggle();
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean loadNBTFile() {
-        try {
-            NbtSizeTracker sizeTracker = new NbtSizeTracker(0x20000000L, 100);
-            NbtCompound nbt = NbtIo.readCompressed(mapFile.toPath(), sizeTracker);
-            //Extracting the palette
-            NbtList paletteList = (NbtList) nbt.get("palette");
-            blockPaletteDict = Utils.getBlockPalette(paletteList);
-
-            NbtList blockList = (NbtList) nbt.get("blocks");
-            map = generateMapArray(blockList);
-
-            //Check if a full 128x128 map is present
-            for (int x = 0; x < map.length; x++) {
-                for (int z = 0; z < map[x].length; z++) {
-                    if (map[x][z] == null) {
-                        warning("No 128x129 (extra line on north side) map present in file: " + mapFile.getName());
-                        return false;
-                    }
-                }
-            }
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
     }
 
     private Pair<Block, Integer>[][] generateMapArray(NbtList blockList) {
@@ -1438,6 +1390,193 @@ public class StaircasedPrinter extends Module {
         return requiredItems;
     }
 
+    // Config System
+
+    private void saveConfig(File configFile) {
+        if (configFile == null) {
+            error("No config file name selected.");
+            return;
+        }
+        if (cartographyTable == null || finishedMapChest == null || dumpStation == null || mapCorner == null
+            || materialDict.isEmpty() || usedToolChest == null || toolSet.isEmpty()) {
+            error("Cannot save config: Missing required data.");
+            return;
+        }
+        try {
+            ConfigSerializer.writeToJson(
+                configFile.toPath(),
+                "staircased",
+                cartographyTable,
+                finishedMapChest,
+                usedToolChest,
+                mapMaterialChests,
+                dumpStation,
+                mapCorner,
+                materialDict,
+                toolSet);
+            Text configText = Text.literal(configFile.getName())
+                .styled(style -> style
+                    .withColor(Formatting.GREEN)
+                    .withClickEvent(new ClickEvent.OpenFile(configFile.getAbsolutePath().toString()))
+                    .withHoverEvent(new HoverEvent.ShowText(Text.literal("Open config")))
+                    .withUnderline(true));
+            info(Text.literal("Successfully saved config to: ").append(configText));
+        } catch (IOException e) {
+            error("Failed to create config file.");
+        }
+    }
+
+    private void loadConfig(File configFile) {
+        if (configFile == null || !configFile.exists()) return;
+        List<State> allowedStates = List.of(
+            State.SelectingChests,
+            State.SelectingFinishedMapChest,
+            State.SelectingUsedPickaxeChest,
+            State.SelectingDumpStation,
+            State.SelectingTable,
+            State.SelectingMapArea,
+            State.AwaitRegisterResponse
+        );
+        if (!allowedStates.contains(state)) {
+            error("Can only load config during the registration phase.");
+            return;
+        }
+
+        try {
+            ConfigDeserializer.ConfigData data =
+                ConfigDeserializer.readFromJson(configFile.toPath());
+
+            if (!data.type.equals("staircased")) {
+                error("Config file is of type "+ data.type +" and not 'staircased'.");
+                return;
+            }
+            if (data.cartographyTable == null || data.finishedMapChest == null || data.dumpStation == null || data.mapCorner == null
+                || data.materialDict.isEmpty() || data.usedToolChest == null || toolSet == null) {
+                error("Config file is missing required data.");
+                return;
+            }
+            this.cartographyTable = data.cartographyTable;
+            this.finishedMapChest = data.finishedMapChest;
+            this.usedToolChest = data.usedToolChest;
+            this.mapMaterialChests = data.mapMaterialChests;
+            this.dumpStation = data.dumpStation;
+            this.mapCorner = data.mapCorner;
+            MapAreaCache.reset(mapCorner);
+            this.materialDict = data.materialDict;
+            this.toolSet = data.toolSet;
+            Text configText = Text.literal(configFile.getName())
+                .styled(style -> style
+                    .withColor(Formatting.GREEN)
+                    .withClickEvent(new ClickEvent.OpenFile(configFile.getAbsolutePath().toString()))
+                    .withHoverEvent(new HoverEvent.ShowText(Text.literal("Open config")))
+                    .withUnderline(true));
+            info(Text.literal("Successfully loaded config: ").append(configText));
+            info("Interact with the Start Block to start printing.");
+            state = State.SelectingChests;
+        } catch (IOException e) {
+            error("Failed to read config file.");
+        }
+    }
+
+    // NBT file handling
+
+    private boolean prepareNextMapFile() {
+        mapFile = Utils.getNextMapFile(mapFolder, startedFiles, moveToFinishedFolder.get());
+
+        if (mapFile == null) {
+            if (disableOnFinished.get()) {
+                info("All nbt files finished");
+                toggle();
+                return false;
+            } else {
+                return false;
+            }
+        }
+        if (!loadNBTFile()) {
+            warning("Failed to read nbt file.");
+            toggle();
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean loadNBTFile() {
+        try {
+            NbtSizeTracker sizeTracker = new NbtSizeTracker(0x20000000L, 100);
+            NbtCompound nbt = NbtIo.readCompressed(mapFile.toPath(), sizeTracker);
+            //Extracting the palette
+            NbtList paletteList = (NbtList) nbt.get("palette");
+            blockPaletteDict = Utils.getBlockPalette(paletteList);
+
+            NbtList blockList = (NbtList) nbt.get("blocks");
+            map = generateMapArray(blockList);
+
+            //Check if a full 128x128 map is present
+            for (int x = 0; x < map.length; x++) {
+                for (int z = 0; z < map[x].length; z++) {
+                    if (map[x][z] == null) {
+                        warning("No 128x129 (extra line on north side) map present in file: " + mapFile.getName());
+                        return false;
+                    }
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // Rendering
+
+    @Override
+    public WWidget getWidget(GuiTheme theme) {
+        System.out.println("Using theme1: " + theme);
+        WVerticalList list = theme.verticalList();
+        WTable table = new WTable();
+        list.add(table);
+
+        File configFolder = new File(mapFolder, "_configs");
+        if (!configFolder.exists()) return table;
+
+        table.add(theme.label("Configurations: "));
+        // ---- Save config button ----
+        WButton saveButton = table.add(theme.button("Save Config")).widget();
+        saveButton.action = () -> {
+            String path = TinyFileDialogs.tinyfd_saveFileDialog(
+                "Save Config",
+                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
+                null,
+                null
+            );
+            if (path != null) saveConfig(new File(path));
+        };
+
+        // ---- Load config button ----
+        WButton loadButton = table.add(theme.button("Load Config")).widget();
+        loadButton.action = () -> {
+            String path = TinyFileDialogs.tinyfd_openFileDialog(
+                "Load Config",
+                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
+                null,
+                null,
+                false
+            );
+            if (path != null) loadConfig(new File(path));
+        };
+        table.row();
+
+        /*WTable slaveTable = new WTable();
+        list.add(slaveTable);
+
+        SlaveTableController slaveController = new SlaveTableController(slaveTable, theme);
+        slaveController.rebuild();
+
+        SlaveSystem.tableController = slaveController;*/
+        return list;
+    }
+
     @Override
     public String getInfoString() {
         if (mapFile != null) {
@@ -1486,18 +1625,18 @@ public class StaircasedPrinter extends Module {
 
         if (renderSpecialInteractions.get()) {
             if (usedToolChest != null) {
-                event.renderer.box(usedToolChest.getLeft().getBlockPos(), color.get(), color.get(), ShapeMode.Lines, 0);
+                event.renderer.box(usedToolChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
                 event.renderer.box(usedToolChest.getRight().x - indicatorSize.get(), usedToolChest.getRight().y - indicatorSize.get(), usedToolChest.getRight().z - indicatorSize.get(), usedToolChest.getRight().getX() + indicatorSize.get(), usedToolChest.getRight().getY() + indicatorSize.get(), usedToolChest.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
             }
             if (cartographyTable != null) {
-                event.renderer.box(cartographyTable.getLeft().getBlockPos(), color.get(), color.get(), ShapeMode.Lines, 0);
+                event.renderer.box(cartographyTable.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
                 event.renderer.box(cartographyTable.getRight().x - indicatorSize.get(), cartographyTable.getRight().y - indicatorSize.get(), cartographyTable.getRight().z - indicatorSize.get(), cartographyTable.getRight().getX() + indicatorSize.get(), cartographyTable.getRight().getY() + indicatorSize.get(), cartographyTable.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
             }
             if (dumpStation != null) {
                 event.renderer.box(dumpStation.getLeft().x - indicatorSize.get(), dumpStation.getLeft().y - indicatorSize.get(), dumpStation.getLeft().z - indicatorSize.get(), dumpStation.getLeft().getX() + indicatorSize.get(), dumpStation.getLeft().getY() + indicatorSize.get(), dumpStation.getLeft().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
             }
             if (finishedMapChest != null) {
-                event.renderer.box(finishedMapChest.getLeft().getBlockPos(), color.get(), color.get(), ShapeMode.Lines, 0);
+                event.renderer.box(finishedMapChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
                 event.renderer.box(finishedMapChest.getRight().x - indicatorSize.get(), finishedMapChest.getRight().y - indicatorSize.get(), finishedMapChest.getRight().z - indicatorSize.get(), finishedMapChest.getRight().getX() + indicatorSize.get(), finishedMapChest.getRight().getY() + indicatorSize.get(), finishedMapChest.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
             }
         }
