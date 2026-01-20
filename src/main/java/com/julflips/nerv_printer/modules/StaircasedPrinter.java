@@ -125,6 +125,7 @@ public class StaircasedPrinter extends Module {
         .name("custom-folder-path")
         .description("Allows to set a custom path to the nbt folder.")
         .defaultValue(false)
+        .onChanged((value) -> warnPathChanged())
         .build()
     );
 
@@ -135,6 +136,7 @@ public class StaircasedPrinter extends Module {
         .wide()
         .renderer(StarscriptTextBoxRenderer.class)
         .visible(() -> customFolderPath.get())
+        .onChanged((value) -> warnPathChanged())
         .build()
     );
 
@@ -472,155 +474,6 @@ public class StaircasedPrinter extends Module {
         Utils.setJumpPressed(false);
     }
 
-    private void refillBuildingInventory(HashMap<Item, Integer> invMaterial) {
-        //Fills restockList with required build materials
-        restockList.clear();
-        HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, availableSlots.size(), map);
-        for (Item item : invMaterial.keySet()) {
-            int oldAmount = requiredItems.remove(item);
-            requiredItems.put(item, oldAmount - invMaterial.get(item));
-        }
-
-        for (Item item : requiredItems.keySet()) {
-            if (requiredItems.get(item) <= 0) continue;
-            int stacks = (int) Math.ceil((float) requiredItems.get(item) / 64f);
-            info("Restocking §a" + stacks + " stacks " + item.getName().getString() + " (" + requiredItems.get(item) + ")");
-            restockList.add(0, Triple.of(item, stacks, requiredItems.get(item)));
-        }
-        addClosestRestockCheckpoint();
-    }
-
-    private void refillMiningInventory() {
-        //Fills restockList with required mining tools
-        restockList.clear();
-        HashMap<ItemStack, Integer> toolUseDict = new HashMap<>();
-
-        for (int x = 0; x < 128; x++) {
-            for (int z = 0; z < 128; z++) {
-                BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
-                if (!blockstate.isAir()) {
-                    ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockstate);
-                    if (bestTool == null) continue;
-                    if (toolUseDict.containsKey(bestTool)) {
-                        toolUseDict.put(bestTool, toolUseDict.get(bestTool) + 1);
-                    } else {
-                        toolUseDict.put(bestTool, 1);
-                    }
-                }
-            }
-        }
-
-        for (ItemStack itemStack : toolUseDict.keySet()) {
-            int rawUses = toolUseDict.get(itemStack);
-            int adjustedUses = (int) Math.ceil(rawUses / 4);
-            int itemsNeeded = (int) Math.ceil((float) adjustedUses / (float) itemStack.getMaxDamage());
-            info("Restocking §a" + itemsNeeded + " " + itemStack.getItem().getName().getString() + " (" + rawUses + " uses)");
-            restockList.add(0, Triple.of(itemStack.getItem().asItem(), itemsNeeded, itemsNeeded));
-        }
-
-        addClosestRestockCheckpoint();
-    }
-
-    private void addClosestRestockCheckpoint() {
-        //Determine closest restock chest for material in restock list
-        if (restockList.size() == 0) return;
-        double smallestDistance = Double.MAX_VALUE;
-        Triple<Item, Integer, Integer> closestEntry = null;
-        Pair<BlockPos, Vec3d> restockPos = null;
-        for (Triple<Item, Integer, Integer> entry : restockList) {
-            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(entry.getLeft());
-            if (bestRestockPos.getLeft() == null) {
-                warning("No chest found for " + entry.getLeft().getName().getString());
-                toggle();
-                return;
-            }
-            double chestDistance = PlayerUtils.distanceTo(bestRestockPos.getRight());
-            if (chestDistance < smallestDistance) {
-                smallestDistance = chestDistance;
-                closestEntry = entry;
-                restockPos = bestRestockPos;
-            }
-        }
-        //Set closest material as first and as checkpoint
-        restockList.remove(closestEntry);
-        restockList.add(0, closestEntry);
-        checkpoints.add(0, new Pair(restockPos.getRight(), new Pair("refill", restockPos.getLeft())));
-    }
-
-    private void calculateBuildingPath(boolean sprintFirst) {
-        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
-        //Fills checkpoints list
-        checkpoints.clear();
-        for (int x = 0; x < 128; x++) {
-            boolean lineFinished = true;
-            for (int z = 0; z < 128; z++) {
-                BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
-                if (blockstate.isAir()) {
-                    lineFinished = false;
-                    break;
-                }
-            }
-            if (lineFinished) continue;
-            Vec3d cp1 = mapCorner.toCenterPos().add(x, 0.5, -1);
-            Vec3d cp2 = mapCorner.toCenterPos().add(x, map[x][map[0].length-2].getRight() + 0.5, map[0].length-2);
-            checkpoints.add(new Pair(cp1, new Pair("", null)));
-            checkpoints.add(new Pair(cp2, new Pair("", null)));
-            checkpoints.add(new Pair(cp1, new Pair("lineEnd", null)));
-        }
-        if (checkpoints.size() > 0 && sprintFirst) {
-            //Make player sprint to the start of the map
-            Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
-            checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
-        }
-    }
-
-    private void calculateMiningPath(boolean sprintFirst) {
-        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
-        //Fills checkpoints list
-        checkpoints.clear();
-        for (int x = 0; x < 128; x++) {
-            boolean lineFinished = true;
-            for (int z = 0; z < 128; z++) {
-                BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
-                if (!blockstate.isAir()) {
-                    lineFinished = false;
-                    break;
-                }
-            }
-            if (lineFinished) continue;
-
-            Vec3d cp1 = mapCorner.toCenterPos().add(x, 0.5, -2);
-            Vec3d cp2 = mapCorner.toCenterPos().add(x, map[x][Math.max(0, map[0].length-2)].getRight()+0.5, map[0].length-2);
-            checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
-            checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
-            checkpoints.add(new Pair(cp1, new Pair("miningLineEnd", null)));
-        }
-        if (checkpoints.size() > 0 && sprintFirst) {
-            //Make player sprint to the start of the map
-            Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
-            checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
-        }
-    }
-
-    private boolean arePlacementsCorrect() {
-        boolean valid = true;
-        for (int x = 0; x < 128; x++) {
-            for (int z = 0; z < 128; z++) {
-                BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
-                if (!blockState.isAir()) {
-                    if (map[x][z].getLeft() != blockState.getBlock()) {
-                        int xError = x + mapCorner.getX();
-                        int zError = z + mapCorner.getZ();
-                        if (logErrors.get()) warning("Error at " + xError + ", " + zError + ". " +
-                            "Is " + blockState.getBlock().getName().getString() + " - Should be " + map[x][z].getLeft().getName().getString());
-                        valid = false;
-                    }
-                }
-            }
-        }
-        return valid;
-    }
-
     @EventHandler
     private void onSendPacket(PacketEvent.Send event) {
         if (state == State.SelectingDumpStation && event.packet instanceof PlayerActionC2SPacket packet
@@ -670,52 +523,26 @@ public class StaircasedPrinter extends Module {
                     warning("No block selected as Start Block! Please select one in the settings.");
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 BlockState blockState = MapAreaCache.getCachedBlockState(blockPos);
-                if (startBlock.get().contains(blockState.getBlock())) {
-                    //Check if requirements to start building are met
-                    if (materialDict.size() == 0) {
-                        warning("No Material Chests selected!");
-                        return;
-                    }
-                    if (toolSet.size() == 0) {
-                        warning("No Tool Chests selected!");
-                        return;
-                    }
-                    if (mapMaterialChests.size() == 0) {
-                        warning("No Map Chests selected!");
-                        return;
-                    }
-                    Utils.setForwardPressed(true);
-                    calculateBuildingPath(true);
-                    availableSlots = Utils.getAvailableSlots(materialDict);
-                    for (int slot : availableSlots) {
-                        if (slot < 9) {
-                            availableHotBarSlots.add(slot);
-                        }
-                    }
-                    info("Inventory slots available for building: " + availableSlots);
-
-                    HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, availableSlots.size(), map);
-                    Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
-                    if (invInformation.getLeft().size() != 0) {
-                        checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
-                    } else {
-                        refillBuildingInventory(invInformation.getRight());
-                    }
-                    if (availableHotBarSlots.size() == 0) {
-                        warning("No free slots found in hot-bar!");
-                        toggle();
-                        return;
-                    }
-                    if (availableSlots.size() < 2) {
-                        warning("You need at least 2 free inventory slots!");
-                        toggle();
-                        return;
-                    }
-                    state = State.Walking;
-                }
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock().equals(Blocks.CHEST)) {
                     tempChestPos = blockPos;
                     state = State.AwaitRegisterResponse;
+                }
+                if (startBlock.get().contains(blockState.getBlock())) {
+                    //Check if requirements to start building are met
+                    if (materialDict.isEmpty()) {
+                        warning("No Material Chests selected!");
+                        return;
+                    }
+                    if (toolSet.isEmpty()) {
+                        warning("No Tool Chests selected!");
+                        return;
+                    }
+                    if (mapMaterialChests.isEmpty()) {
+                        warning("No Map Chests selected!");
+                        return;
+                    }
+
+                    startBuilding();
                 }
                 break;
         }
@@ -952,7 +779,7 @@ public class StaircasedPrinter extends Module {
         if (restockBacklogSlots.size() > 0) {
             int slot = restockBacklogSlots.remove(0);
             mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot, 1, SlotActionType.QUICK_MOVE, mc.player);
-            if (restockBacklogSlots.size() == 0) {
+            if (restockBacklogSlots.isEmpty()) {
                 if (state.equals(State.AwaitRestockResponse)) {
                     endRestocking();
                 }
@@ -1001,13 +828,7 @@ public class StaircasedPrinter extends Module {
         // Load next nbt file
         if (state == State.AwaitNBTFile) {
             if (!prepareNextMapFile()) return;
-            info("Building: §a" + mapFile.getName());
-            info("Requirements: ");
-            for (Pair<Block, Integer> p : blockPaletteDict.values()) {
-                if (p.getRight() == 0) continue;
-                info(p.getLeft().getName().getString() + ": " + p.getRight());
-            }
-            state = State.Walking;
+            startBuilding();
         }
 
         // Handle Block Entity interaction response
@@ -1098,7 +919,7 @@ public class StaircasedPrinter extends Module {
                     Utils.setForwardPressed(true);
                     Utils.setBackwardPressed(false);
                     calculateMiningPath(false);
-                    if (checkpoints.size() == 0) {
+                    if (checkpoints.isEmpty()) {
                         checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
                     }
                     break;
@@ -1107,7 +928,7 @@ public class StaircasedPrinter extends Module {
                     interactWithBlock(usedToolChest.getLeft());
                     return;
             }
-            if (checkpoints.size() == 0) {
+            if (checkpoints.isEmpty()) {
                 if (!arePlacementsCorrect() && errorAction.get() == ErrorAction.ToggleOff) {
                     checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
                     warning("ErrorAction is ToggleOff: Stopping because of error...");
@@ -1183,13 +1004,153 @@ public class StaircasedPrinter extends Module {
         }
     }
 
-    private int getDumpSlot() {
-        HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, availableSlots.size(), map);
-        Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
-        if (invInformation.getLeft().isEmpty()) {
-            return -1;
+    // Restocking
+
+    private Pair<BlockPos, Vec3d> getBestChest(Item item) {
+        Vec3d bestPos = null;
+        BlockPos bestChestPos = null;
+        ArrayList<Pair<BlockPos, Vec3d>> list = new ArrayList<>();
+        if (item.equals(Items.CARTOGRAPHY_TABLE)) {
+            list = mapMaterialChests;
+        } else if (materialDict.containsKey(item)) {
+            list = materialDict.get(item);
+        } else {
+            warning("No chest found for " + item.getName().getString());
+            toggle();
+            return new Pair<>(new BlockPos(0, 0, 0), new Vec3d(0, 0, 0));
         }
-        return invInformation.getLeft().get(0);
+        //Get nearest chest
+        for (Pair<BlockPos, Vec3d> p : list) {
+            //Skip chests that have already been checked
+            if (checkedChests.contains(p.getLeft())) continue;
+            if (bestPos == null || PlayerUtils.distanceTo(p.getRight()) < PlayerUtils.distanceTo(bestPos)) {
+                bestPos = p.getRight();
+                bestChestPos = p.getLeft();
+            }
+        }
+        if (bestPos == null || bestChestPos == null) {
+            checkedChests.clear();
+            return getBestChest(item);
+        }
+        return new Pair(bestChestPos, bestPos);
+    }
+
+    private void refillBuildingInventory(HashMap<Item, Integer> invMaterial) {
+        //Fills restockList with required build materials
+        restockList.clear();
+        HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, availableSlots.size(), map);
+        for (Item item : invMaterial.keySet()) {
+            int oldAmount = requiredItems.remove(item);
+            requiredItems.put(item, oldAmount - invMaterial.get(item));
+        }
+
+        for (Item item : requiredItems.keySet()) {
+            if (requiredItems.get(item) <= 0) continue;
+            int stacks = (int) Math.ceil((float) requiredItems.get(item) / 64f);
+            info("Restocking §a" + stacks + " stacks " + item.getName().getString() + " (" + requiredItems.get(item) + ")");
+            restockList.add(0, Triple.of(item, stacks, requiredItems.get(item)));
+        }
+        addClosestRestockCheckpoint();
+    }
+
+    private void refillMiningInventory() {
+        //Fills restockList with required mining tools
+        restockList.clear();
+        HashMap<ItemStack, Integer> toolUseDict = new HashMap<>();
+
+        for (int x = 0; x < 128; x++) {
+            for (int z = 0; z < 128; z++) {
+                BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
+                if (!blockstate.isAir()) {
+                    ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockstate);
+                    if (bestTool == null) continue;
+                    if (toolUseDict.containsKey(bestTool)) {
+                        toolUseDict.put(bestTool, toolUseDict.get(bestTool) + 1);
+                    } else {
+                        toolUseDict.put(bestTool, 1);
+                    }
+                }
+            }
+        }
+
+        for (ItemStack itemStack : toolUseDict.keySet()) {
+            int rawUses = toolUseDict.get(itemStack);
+            int adjustedUses = (int) Math.ceil(rawUses / 4);
+            int itemsNeeded = (int) Math.ceil((float) adjustedUses / (float) itemStack.getMaxDamage());
+            info("Restocking §a" + itemsNeeded + " " + itemStack.getItem().getName().getString() + " (" + rawUses + " uses)");
+            restockList.add(0, Triple.of(itemStack.getItem().asItem(), itemsNeeded, itemsNeeded));
+        }
+
+        addClosestRestockCheckpoint();
+    }
+
+    private void addClosestRestockCheckpoint() {
+        //Determine closest restock chest for material in restock list
+        if (restockList.isEmpty()) return;
+        double smallestDistance = Double.MAX_VALUE;
+        Triple<Item, Integer, Integer> closestEntry = null;
+        Pair<BlockPos, Vec3d> restockPos = null;
+        for (Triple<Item, Integer, Integer> entry : restockList) {
+            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(entry.getLeft());
+            if (bestRestockPos.getLeft() == null) {
+                warning("No chest found for " + entry.getLeft().getName().getString());
+                toggle();
+                return;
+            }
+            double chestDistance = PlayerUtils.distanceTo(bestRestockPos.getRight());
+            if (chestDistance < smallestDistance) {
+                smallestDistance = chestDistance;
+                closestEntry = entry;
+                restockPos = bestRestockPos;
+            }
+        }
+        //Set closest material as first and as checkpoint
+        restockList.remove(closestEntry);
+        restockList.add(0, closestEntry);
+        checkpoints.add(0, new Pair(restockPos.getRight(), new Pair("refill", restockPos.getLeft())));
+    }
+
+    private void endRestocking() {
+        if (restockList.get(0).getMiddle() > 0) {
+            warning("Not all necessary stacks restocked. Searching for another chest...");
+            //Search for the next best chest
+            checkedChests.add(lastInteractedChest);
+            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(getMaterialFromPos(lastInteractedChest));
+            checkpoints.add(0, new Pair<>(bestRestockPos.getRight(), new Pair<>("refill", bestRestockPos.getLeft())));
+        } else {
+            checkedChests.clear();
+            restockList.remove(0);
+            addClosestRestockCheckpoint();
+        }
+        timeoutTicks = postRestockDelay.get();
+        state = State.Walking;
+    }
+
+    private Item getMaterialFromPos(BlockPos pos) {
+        for (Item item : materialDict.keySet()) {
+            for (Pair<BlockPos, Vec3d> p : materialDict.get(item)) {
+                if (p.getLeft().equals(pos)) return item;
+            }
+        }
+        warning("Could not find material for chest position : " + pos.toShortString());
+        toggle();
+        return null;
+    }
+
+    // Block Interactions
+
+    private void interactWithBlock(BlockPos chestPos) {
+        Utils.setForwardPressed(false);
+        mc.player.setVelocity(0, 0, 0);
+        mc.player.setYaw((float) Rotations.getYaw(chestPos.toCenterPos()));
+        mc.player.setPitch((float) Rotations.getPitch(chestPos.toCenterPos()));
+
+        BlockHitResult hitResult = new BlockHitResult(chestPos.toCenterPos(), Utils.getInteractionSide(chestPos), chestPos, false);
+        BlockUtils.interact(hitResult, Hand.MAIN_HAND, true);
+
+        //Set timeout for chest interaction
+        interactTimeout = retryInteractTimer.get();
+        lastInteractedChest = chestPos;
     }
 
     private void tryPlacingBlock(BlockPos pos) {
@@ -1249,122 +1210,123 @@ public class StaircasedPrinter extends Module {
         return hitResult.getPos().equals(pos);
     }
 
-    private void endRestocking() {
-        if (restockList.get(0).getMiddle() > 0) {
-            warning("Not all necessary stacks restocked. Searching for another chest...");
-            //Search for the next best chest
-            checkedChests.add(lastInteractedChest);
-            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(getMaterialFromPos(lastInteractedChest));
-            checkpoints.add(0, new Pair<>(bestRestockPos.getRight(), new Pair<>("refill", bestRestockPos.getLeft())));
-        } else {
-            checkedChests.clear();
-            restockList.remove(0);
-            addClosestRestockCheckpoint();
+    private boolean arePlacementsCorrect() {
+        boolean valid = true;
+        for (int x = 0; x < 128; x++) {
+            for (int z = 0; z < 128; z++) {
+                BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
+                if (!blockState.isAir()) {
+                    if (map[x][z].getLeft() != blockState.getBlock()) {
+                        int xError = x + mapCorner.getX();
+                        int zError = z + mapCorner.getZ();
+                        if (logErrors.get()) warning("Error at " + xError + ", " + zError + ". " +
+                            "Is " + blockState.getBlock().getName().getString() + " - Should be " + map[x][z].getLeft().getName().getString());
+                        valid = false;
+                    }
+                }
+            }
         }
-        timeoutTicks = postRestockDelay.get();
+        return valid;
+    }
+
+    // Path and Building Management
+
+    private void calculateBuildingPath(boolean sprintFirst) {
+        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
+        //Fills checkpoints list
+        checkpoints.clear();
+        for (int x = 0; x < 128; x++) {
+            boolean lineFinished = true;
+            for (int z = 0; z < 128; z++) {
+                BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
+                if (blockstate.isAir()) {
+                    lineFinished = false;
+                    break;
+                }
+            }
+            if (lineFinished) continue;
+            Vec3d cp1 = mapCorner.toCenterPos().add(x, 0.5, -1);
+            Vec3d cp2 = mapCorner.toCenterPos().add(x, map[x][map[0].length-2].getRight() + 0.5, map[0].length-2);
+            checkpoints.add(new Pair(cp1, new Pair("", null)));
+            checkpoints.add(new Pair(cp2, new Pair("", null)));
+            checkpoints.add(new Pair(cp1, new Pair("lineEnd", null)));
+        }
+        if (checkpoints.size() > 0 && sprintFirst) {
+            //Make player sprint to the start of the map
+            Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
+            checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
+        }
+    }
+
+    private void calculateMiningPath(boolean sprintFirst) {
+        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
+        //Fills checkpoints list
+        checkpoints.clear();
+        for (int x = 0; x < 128; x++) {
+            boolean lineFinished = true;
+            for (int z = 0; z < 128; z++) {
+                BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
+                if (!blockstate.isAir()) {
+                    lineFinished = false;
+                    break;
+                }
+            }
+            if (lineFinished) continue;
+
+            Vec3d cp1 = mapCorner.toCenterPos().add(x, 0.5, -2);
+            Vec3d cp2 = mapCorner.toCenterPos().add(x, map[x][Math.max(0, map[0].length-2)].getRight()+0.5, map[0].length-2);
+            checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
+            checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
+            checkpoints.add(new Pair(cp1, new Pair("miningLineEnd", null)));
+        }
+        if (checkpoints.size() > 0 && sprintFirst) {
+            //Make player sprint to the start of the map
+            Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
+            checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
+        }
+    }
+
+    private void startBuilding() {
+        if (availableSlots.isEmpty()) setupSlots();
+        calculateBuildingPath(true);
+        checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         state = State.Walking;
     }
 
-    private Pair<BlockPos, Vec3d> getBestChest(Item item) {
-        Vec3d bestPos = null;
-        BlockPos bestChestPos = null;
-        ArrayList<Pair<BlockPos, Vec3d>> list = new ArrayList<>();
-        if (item.equals(Items.CARTOGRAPHY_TABLE)) {
-            list = mapMaterialChests;
-        } else if (materialDict.containsKey(item)) {
-            list = materialDict.get(item);
-        } else {
-            warning("No chest found for " + item.getName().getString());
+    // Todo: EndBuilding
+
+    // Inventory Management
+
+    private boolean setupSlots() {
+        availableSlots = Utils.getAvailableSlots(materialDict);
+        for (int slot : availableSlots) {
+            if (slot < 9) {
+                availableHotBarSlots.add(slot);
+            }
+        }
+        info("Inventory slots available for building: " + availableSlots);
+        if (availableHotBarSlots.isEmpty()) {
+            warning("No free slots found in hot-bar!");
+            availableSlots.clear();
             toggle();
-            return new Pair<>(new BlockPos(0, 0, 0), new Vec3d(0, 0, 0));
+            return false;
         }
-        //Get nearest chest
-        for (Pair<BlockPos, Vec3d> p : list) {
-            //Skip chests that have already been checked
-            if (checkedChests.contains(p.getLeft())) continue;
-            if (bestPos == null || PlayerUtils.distanceTo(p.getRight()) < PlayerUtils.distanceTo(bestPos)) {
-                bestPos = p.getRight();
-                bestChestPos = p.getLeft();
-            }
+        if (availableSlots.size() < 2) {
+            warning("You need at least 2 free inventory slots!");
+            availableSlots.clear();
+            toggle();
+            return false;
         }
-        if (bestPos == null || bestChestPos == null) {
-            checkedChests.clear();
-            return getBestChest(item);
-        }
-        return new Pair(bestChestPos, bestPos);
+        return true;
     }
 
-    private void interactWithBlock(BlockPos chestPos) {
-        Utils.setForwardPressed(false);
-        mc.player.setVelocity(0, 0, 0);
-        mc.player.setYaw((float) Rotations.getYaw(chestPos.toCenterPos()));
-        mc.player.setPitch((float) Rotations.getPitch(chestPos.toCenterPos()));
-
-        BlockHitResult hitResult = new BlockHitResult(chestPos.toCenterPos(), Utils.getInteractionSide(chestPos), chestPos, false);
-        BlockUtils.interact(hitResult, Hand.MAIN_HAND, true);
-
-        //Set timeout for chest interaction
-        interactTimeout = retryInteractTimer.get();
-        lastInteractedChest = chestPos;
-    }
-
-    private Item getMaterialFromPos(BlockPos pos) {
-        for (Item item : materialDict.keySet()) {
-            for (Pair<BlockPos, Vec3d> p : materialDict.get(item)) {
-                if (p.getLeft().equals(pos)) return item;
-            }
+    private int getDumpSlot() {
+        HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, availableSlots.size(), map);
+        Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
+        if (invInformation.getLeft().isEmpty()) {
+            return -1;
         }
-        warning("Could not find material for chest position : " + pos.toShortString());
-        toggle();
-        return null;
-    }
-
-    private Pair<Block, Integer>[][] generateMapArray(NbtList blockList) {
-        // Get the highest block of each column
-        Pair<Block, Integer>[][] absoluteHeightMap = new Pair[128][129];
-        for (int i = 0; i < blockList.size(); i++) {
-            Optional<NbtCompound> blockOpt = blockList.getCompound(i);
-            if (blockOpt.isEmpty()) continue;
-
-            NbtCompound block = blockOpt.get();
-
-            Optional<Integer> blockIdOpt = block.getInt("state");
-            if (blockIdOpt.isEmpty() || !blockPaletteDict.containsKey(blockIdOpt.get())) continue;
-
-            int blockId = blockIdOpt.get();
-
-            NbtList pos = block.getList("pos").get();
-
-            Optional<Integer> xOpt = pos.getInt(0);
-            Optional<Integer> yOpt = pos.getInt(1);
-            Optional<Integer> zOpt = pos.getInt(2);
-            if (xOpt.isEmpty() || yOpt.isEmpty() || zOpt.isEmpty()) {
-                continue;
-            }
-
-            int x = xOpt.get();
-            int y = yOpt.get();
-            int z = zOpt.get();
-            if (absoluteHeightMap[x][z] == null || absoluteHeightMap[x][z].getRight() < y) {
-                Block material = blockPaletteDict.get(blockId).getLeft();
-                absoluteHeightMap[x][z] = new Pair<>(material, y);
-            }
-            if (z > 0) {
-                blockPaletteDict.put(blockId, new Pair(blockPaletteDict.get(blockId).getLeft(), blockPaletteDict.get(blockId).getRight()+1));
-            }
-        }
-        // Smooth the y pos out to max 1 block difference
-        Pair<Block, Integer>[][] smoothedHeightMap = new Pair[128][128];
-        for (int x = 0; x < absoluteHeightMap.length; x++) {
-            int totalYDiff = 0;
-            for (int z = 1; z < absoluteHeightMap[0].length; z++) {
-                int predecessorY = absoluteHeightMap[x][z-1].getRight();
-                int currentY = absoluteHeightMap[x][z].getRight();
-                totalYDiff += Math.max(-1, Math.min(currentY - predecessorY, 1));
-                smoothedHeightMap[x][z-1] = new Pair<>(absoluteHeightMap[x][z].getLeft(), totalYDiff);
-            }
-        }
-        return smoothedHeightMap;
+        return invInformation.getLeft().get(0);
     }
 
     public HashMap<Item, Integer> getRequiredItems(BlockPos mapCorner, int availableSlotsSize, Pair<Block, Integer>[][] map) {
@@ -1388,6 +1350,19 @@ public class StaircasedPrinter extends Module {
             }
         }
         return requiredItems;
+    }
+
+    // MapPrinter Interface for Slave Logic
+
+    // ToDo
+
+    // Path Change Check
+
+    private void warnPathChanged() {
+        if (checkpoints != null && !activationReset.get()) {
+            String reString = isActive() ? "re" : "";
+            warning("The custom path is only applied if the module is " + reString + "started with Activation Reset enabled!");
+        }
     }
 
     // Config System
@@ -1503,6 +1478,7 @@ public class StaircasedPrinter extends Module {
 
     private boolean loadNBTFile() {
         try {
+            info("Building: §a" + mapFile.getName());
             NbtSizeTracker sizeTracker = new NbtSizeTracker(0x20000000L, 100);
             NbtCompound nbt = NbtIo.readCompressed(mapFile.toPath(), sizeTracker);
             //Extracting the palette
@@ -1511,6 +1487,12 @@ public class StaircasedPrinter extends Module {
 
             NbtList blockList = (NbtList) nbt.get("blocks");
             map = generateMapArray(blockList);
+
+            info("Requirements: ");
+            for (Pair<Block, Integer> p : blockPaletteDict.values()) {
+                if (p.getRight() == 0) continue;
+                info(p.getLeft().getName().getString() + ": " + p.getRight());
+            }
 
             //Check if a full 128x128 map is present
             for (int x = 0; x < map.length; x++) {
@@ -1526,6 +1508,54 @@ public class StaircasedPrinter extends Module {
             e.printStackTrace();
             return false;
         }
+    }
+
+    private Pair<Block, Integer>[][] generateMapArray(NbtList blockList) {
+        // Get the highest block of each column
+        Pair<Block, Integer>[][] absoluteHeightMap = new Pair[128][129];
+        for (int i = 0; i < blockList.size(); i++) {
+            Optional<NbtCompound> blockOpt = blockList.getCompound(i);
+            if (blockOpt.isEmpty()) continue;
+
+            NbtCompound block = blockOpt.get();
+
+            Optional<Integer> blockIdOpt = block.getInt("state");
+            if (blockIdOpt.isEmpty() || !blockPaletteDict.containsKey(blockIdOpt.get())) continue;
+
+            int blockId = blockIdOpt.get();
+
+            NbtList pos = block.getList("pos").get();
+
+            Optional<Integer> xOpt = pos.getInt(0);
+            Optional<Integer> yOpt = pos.getInt(1);
+            Optional<Integer> zOpt = pos.getInt(2);
+            if (xOpt.isEmpty() || yOpt.isEmpty() || zOpt.isEmpty()) {
+                continue;
+            }
+
+            int x = xOpt.get();
+            int y = yOpt.get();
+            int z = zOpt.get();
+            if (absoluteHeightMap[x][z] == null || absoluteHeightMap[x][z].getRight() < y) {
+                Block material = blockPaletteDict.get(blockId).getLeft();
+                absoluteHeightMap[x][z] = new Pair<>(material, y);
+            }
+            if (z > 0) {
+                blockPaletteDict.put(blockId, new Pair(blockPaletteDict.get(blockId).getLeft(), blockPaletteDict.get(blockId).getRight()+1));
+            }
+        }
+        // Smooth the y pos out to max 1 block difference
+        Pair<Block, Integer>[][] smoothedHeightMap = new Pair[128][128];
+        for (int x = 0; x < absoluteHeightMap.length; x++) {
+            int totalYDiff = 0;
+            for (int z = 1; z < absoluteHeightMap[0].length; z++) {
+                int predecessorY = absoluteHeightMap[x][z-1].getRight();
+                int currentY = absoluteHeightMap[x][z].getRight();
+                totalYDiff += Math.max(-1, Math.min(currentY - predecessorY, 1));
+                smoothedHeightMap[x][z-1] = new Pair<>(absoluteHeightMap[x][z].getLeft(), totalYDiff);
+            }
+        }
+        return smoothedHeightMap;
     }
 
     // Rendering
