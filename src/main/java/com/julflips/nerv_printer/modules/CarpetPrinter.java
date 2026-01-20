@@ -545,11 +545,11 @@ public class CarpetPrinter extends Module implements MapPrinter {
                 }
                 if (startBlock.get().contains(blockState.getBlock())) {
                     //Check if requirements to start building are met
-                    if (materialDict.size() == 0) {
+                    if (materialDict.isEmpty()) {
                         warning("No Material Chests selected!");
                         return;
                     }
-                    if (mapMaterialChests.size() == 0) {
+                    if (mapMaterialChests.isEmpty()) {
                         warning("No Map Chests selected!");
                         return;
                     }
@@ -665,8 +665,8 @@ public class CarpetPrinter extends Module implements MapPrinter {
                 }
                 interactTimeout = 0;
                 timeoutTicks = postRestockDelay.get();
-                getOneItem(mapSlot, false, packet);
-                getOneItem(paneSlot, true, packet);
+                Utils.getOneItem(mapSlot, false, availableSlots, availableHotBarSlots, packet);
+                Utils.getOneItem(paneSlot, true, availableSlots, availableHotBarSlots, packet);
                 mc.player.getInventory().setSelectedSlot(availableHotBarSlots.get(0));
 
                 Vec3d center = mapCorner.add(map.length / 2 - 1, 0, map[0].length / 2 - 1).toCenterPos();
@@ -786,7 +786,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         if (restockBacklogSlots.size() > 0) {
             int slot = restockBacklogSlots.remove(0);
             mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot, 1, SlotActionType.QUICK_MOVE, mc.player);
-            if (restockBacklogSlots.size() == 0) {
+            if (restockBacklogSlots.isEmpty()) {
                 if (state.equals(State.AwaitRestockResponse)) {
                     endRestocking();
                 }
@@ -947,7 +947,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     BlockUtils.breakBlock(miningPos, true);
                     return;
             }
-            if (checkpoints.size() == 0) {
+            if (checkpoints.isEmpty()) {
                 if (SlaveSystem.isSlave()) {
                     SlaveSystem.queueMasterDM("finished");
                     state = State.AwaitSlaveNextMap;
@@ -1055,7 +1055,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
     private void addClosestRestockCheckpoint() {
         //Determine closest restock chest for material in restock list
-        if (restockList.size() == 0) return;
+        if (restockList.isEmpty()) return;
         double smallestDistance = Double.MAX_VALUE;
         Triple<Item, Integer, Integer> closestEntry = null;
         Pair<BlockPos, Vec3d> restockPos = null;
@@ -1200,13 +1200,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         if (!SlaveSystem.isSlave()) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         calculateBuildingPath(true, true);
-        HashMap<Item, Integer> requiredItems = Utils.getRequiredItems(mapCorner, workingInterval, linesPerRun.get(), availableSlots.size(), map);
-        Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
-        if (invInformation.getLeft().size() != 0) {
-            checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
-        } else {
-            refillInventory(invInformation.getRight());
-        }
+        checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         state = State.Walking;
     }
 
@@ -1266,13 +1260,15 @@ public class CarpetPrinter extends Module implements MapPrinter {
             }
         }
         info("Inventory slots available for building: " + availableSlots);
-        if (availableHotBarSlots.size() == 0) {
+        if (availableHotBarSlots.isEmpty()) {
             warning("No free slots found in hot-bar!");
+            availableSlots.clear();
             toggle();
             return false;
         }
         if (availableSlots.size() < 2) {
             warning("You need at least 2 free inventory slots!");
+            availableSlots.clear();
             toggle();
             return false;
         }
@@ -1286,25 +1282,6 @@ public class CarpetPrinter extends Module implements MapPrinter {
             return -1;
         }
         return invInformation.getLeft().get(0);
-    }
-
-    private void getOneItem(int sourceSlot, boolean avoidFirstHotBar, InventoryS2CPacket packet) {
-        int targetSlot = availableHotBarSlots.get(0);
-        if (avoidFirstHotBar) {
-            targetSlot = availableSlots.get(0);
-            if (availableSlots.get(0) == availableHotBarSlots.get(0)) {
-                targetSlot = availableSlots.get(1);
-            }
-        }
-        if (targetSlot < 9) {
-            targetSlot += 27;
-        } else {
-            targetSlot -= 9;
-        }
-        targetSlot = packet.contents().size() - 36 + targetSlot;
-        mc.interactionManager.clickSlot(packet.syncId(), sourceSlot, 0, SlotActionType.PICKUP, mc.player);
-        mc.interactionManager.clickSlot(packet.syncId(), targetSlot, 1, SlotActionType.PICKUP, mc.player);
-        mc.interactionManager.clickSlot(packet.syncId(), sourceSlot, 0, SlotActionType.PICKUP, mc.player);
     }
 
     // MapPrinter Interface for Slave Logic
