@@ -929,24 +929,8 @@ public class StaircasedPrinter extends Module {
                     return;
             }
             if (checkpoints.isEmpty()) {
-                if (!arePlacementsCorrect() && errorAction.get() == ErrorAction.ToggleOff) {
-                    checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
-                    warning("ErrorAction is ToggleOff: Stopping because of error...");
-                    toggle();
-                    return;
-                }
-                info("Finished building map");
-                Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
-                checkpoints.add(0, new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
-                try {
-                    if (moveToFinishedFolder.get()) {
-                        mapFile.renameTo(new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName()));
-                    }
-                } catch (Exception e) {
-                    warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
-                    e.printStackTrace();
-                }
-                checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+                boolean endResult = endBuilding();
+                if (!endResult) return;
             }
             goal = checkpoints.get(0).getLeft();
         }
@@ -1293,7 +1277,27 @@ public class StaircasedPrinter extends Module {
         state = State.Walking;
     }
 
-    // Todo: EndBuilding
+    private boolean endBuilding() {
+        if (!arePlacementsCorrect() && errorAction.get() == ErrorAction.ToggleOff) {
+            checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
+            warning("ErrorAction is ToggleOff: Stopping because of error...");
+            toggle();
+            return false;
+        }
+        info("Finished building map");
+        Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
+        checkpoints.add(0, new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
+        try {
+            if (moveToFinishedFolder.get()) {
+                mapFile.renameTo(new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName()));
+            }
+        } catch (Exception e) {
+            warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
+            e.printStackTrace();
+        }
+        checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+        return true;
+    }
 
     // Inventory Management
 

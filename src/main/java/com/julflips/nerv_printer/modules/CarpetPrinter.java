@@ -738,7 +738,8 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
         if (state.equals(State.AwaitSlaveContinue)) {
             if (!SlaveSystem.isSlave() && SlaveSystem.allSlavesFinished()) {
-                endBuilding();
+                boolean endResult = endBuilding();
+                if (!endResult) return;
             } else {
                 return;
             }
@@ -955,7 +956,8 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     return;
                 }
                 if (SlaveSystem.allSlavesFinished()) {
-                    endBuilding();
+                    boolean endResult = endBuilding();
+                    if (!endResult) return;
                 } else {
                     info("Waiting for slaves to finish...");
                     state = State.AwaitSlaveContinue;
@@ -1204,14 +1206,14 @@ public class CarpetPrinter extends Module implements MapPrinter {
         state = State.Walking;
     }
 
-    private void endBuilding() {
+    private boolean endBuilding() {
         if (!knownErrors.isEmpty()) {
             if (errorAction.get() == ErrorAction.ToggleOff) {
                 knownErrors.clear();
                 checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
                 warning("ErrorAction is ToggleOff: Stopping because of an error...");
                 toggle();
-                return;
+                return false;
             }
             if (errorAction.get() == ErrorAction.Repair) {
                 workingInterval = new Pair<>(0, map.length-1);
@@ -1229,7 +1231,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                 }
                 knownErrors.clear();
                 state = State.Walking;
-                return;
+                return true;
             }
         }
         info("Finished building map");
@@ -1238,7 +1240,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         knownErrors.clear();
         SlaveSystem.setAllSlavesUnfinished();
         Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
-        if (bestChest == null) return;
+        if (bestChest == null) return false;
         checkpoints.add(0, new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         try {
@@ -1248,6 +1250,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
             e.printStackTrace();
         }
+        return true;
     }
 
     // Inventory Management
