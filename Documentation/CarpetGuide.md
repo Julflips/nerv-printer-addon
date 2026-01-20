@@ -54,6 +54,10 @@ The bot will build the map line by line. It calculates the maximum area he can c
 ### Create Map Item
 When the map is finished the bot grabs an empty map and glass pane from the MapMaterialChest and walks a small circle in the center to fill it. Depending on your render distance this step might be unnecessary. After storing the map the bot will trigger the reset and start with the next nbt file.
 
+If you still need help: There is a YouTube video demonstrating the process (in spanish):
+
+[![Carpet Printer](https://img.youtube.com/vi/4jPSDu2ELxc/0.jpg)](https://www.youtube.com/watch?v=4jPSDu2ELxc)
+
 ## Optional
 
 ### Save and Load Configurations
@@ -65,6 +69,7 @@ The printer can orchestrate multiple accounts simultaneously to print a map on t
 One bot acts as the **master** and instructs the other **slaves** via direct messages.
 
 **Setup:**
-1. Load the configuration and enable the module on **every** bot.
-2. Move all slave bots into render distance of the master bot, then press the **Register** button using the master account. An **Accept** message should appear for each slave.
-3. Start the print in the usual way.
+1. Adjust the prefix and suffix in the settings. To circumvent DM signatures most servers use third-party DM plugins. As the syntax of them vary you will need to adjust pre- & suffix in the Multi-User-settings. Receiving DMs should look like this: (prefix)(sender's name)(suffix)(message)
+2. Load the configuration and enable the module on **every** bot.
+3. Move all slave bots into render distance of the master bot, then press the **Register** button using the master account. An **Accept** message should appear for each slave.
+4. Start the print in the usual way.
