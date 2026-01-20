@@ -1201,6 +1201,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
     private void startBuilding() {
         if (!SlaveSystem.isSlave()) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
+        MapAreaCache.reset(mapCorner);
         calculateBuildingPath(true, true);
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         state = State.Walking;

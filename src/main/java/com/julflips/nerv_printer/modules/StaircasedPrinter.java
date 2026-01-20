@@ -1272,6 +1272,7 @@ public class StaircasedPrinter extends Module {
 
     private void startBuilding() {
         if (availableSlots.isEmpty()) setupSlots();
+        MapAreaCache.reset(mapCorner);
         calculateBuildingPath(true);
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         state = State.Walking;
