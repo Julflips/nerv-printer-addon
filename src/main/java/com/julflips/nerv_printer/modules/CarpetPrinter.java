@@ -736,10 +736,9 @@ public class CarpetPrinter extends Module implements MapPrinter {
     private void onTick(TickEvent.Pre event) {
         if (state == null) return;
 
-        if (state.equals(State.AwaitSlaveContinue)) {
-            if (!SlaveSystem.isSlave() && SlaveSystem.allSlavesFinished()) {
-                boolean endResult = endBuilding();
-                if (!endResult) return;
+        if (state.equals(State.AwaitMasterAllBuilt)) {
+            if (SlaveSystem.allSlavesFinished()) {
+                if (!endBuilding()) return;
             } else {
                 return;
             }
@@ -956,11 +955,10 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     return;
                 }
                 if (SlaveSystem.allSlavesFinished()) {
-                    boolean endResult = endBuilding();
-                    if (!endResult) return;
+                    if (!endBuilding()) return;
                 } else {
                     info("Waiting for slaves to finish...");
-                    state = State.AwaitSlaveContinue;
+                    state = State.AwaitMasterAllBuilt;
                     Utils.setForwardPressed(false);
                     return;
                 }
@@ -1242,8 +1240,8 @@ public class CarpetPrinter extends Module implements MapPrinter {
         SlaveSystem.setAllSlavesUnfinished();
         Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
         if (bestChest == null) return false;
-        checkpoints.add(0, new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
-        checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+        checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+        checkpoints.add(new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
         try {
             if (moveToFinishedFolder.get())
                 mapFile.renameTo(new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName()));
@@ -1312,10 +1310,10 @@ public class CarpetPrinter extends Module implements MapPrinter {
     public void start() {
         if (availableSlots.isEmpty() || state.equals(State.AwaitSlaveNextMap)) {
             state = State.AwaitNBTFile;
+            return;
         }
-        if (oldState != null) {
+        if (state.equals(State.AwaitSlaveContinue)) {
             state = oldState;
-            oldState = null;
         }
     }
 
@@ -1425,10 +1423,8 @@ public class CarpetPrinter extends Module implements MapPrinter {
             if (disableOnFinished.get()) {
                 info("All nbt files finished");
                 toggle();
-                return false;
-            } else {
-                return false;
             }
+            return false;
         }
         if (!loadNBTFile()) {
             warning("Failed to read nbt file.");
@@ -1592,6 +1588,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         AwaitBlockBreak,
         AwaitAreaClear,
         AwaitNBTFile,
+        AwaitMasterAllBuilt,
         AwaitSlaveContinue,
         AwaitSlaveNextMap,
         Walking,
