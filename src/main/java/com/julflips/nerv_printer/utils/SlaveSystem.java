@@ -154,6 +154,7 @@ public final class SlaveSystem {
         activeSlavesDict.remove(slave);
         finishedSlavesDict.remove(slave);
         queueDM(slave, "remove");
+        generateIntervals();
     }
 
     public static boolean canSeePlayer(String playerName) {
