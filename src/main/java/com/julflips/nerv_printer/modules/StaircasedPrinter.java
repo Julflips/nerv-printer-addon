@@ -776,6 +776,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     }
                 }
                 state = State.AwaitNBTFile;
+                if (SlaveSystem.isSlave()) {
+                    SlaveSystem.queueMasterDM("finished");
+                    state = State.AwaitSlaveNextMap;
+                    Utils.setBackwardPressed(false);
+                    return;
+                }
                 break;
         }
     }
@@ -877,6 +883,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, workingInterval, availableSlots.size(), map);
                 Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
                 refillBuildingInventory(invInformation.getRight());
+                if (checkpoints.isEmpty() && SlaveSystem.isSlave()) {
+                    SlaveSystem.queueMasterDM("finished");
+                    state = State.AwaitSlaveStartMine;
+                    Utils.setForwardPressed(false);
+                    return;
+                }
                 state = State.Walking;
             } else {
                 if (debugPrints.get())
@@ -1007,35 +1019,31 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 if (state.equals(State.Walking)) {
                     // Done Building
                     if (SlaveSystem.isSlave()) {
-                        SlaveSystem.queueMasterDM("finished");
-                        state = State.AwaitSlaveStartMine;
-                        Utils.setForwardPressed(false);
-                        return;
-                    }
-                    if (SlaveSystem.allSlavesFinished()) {
-                        if (!endBuilding()) return;
+                        checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
                     } else {
-                        info("Waiting for slaves to finish placing...");
-                        state = State.AwaitMasterAllBuilt;
-                        Utils.setForwardPressed(false);
-                        return;
+                        if (SlaveSystem.allSlavesFinished()) {
+                            if (!endBuilding()) return;
+                        } else {
+                            info("Waiting for slaves to finish placing...");
+                            state = State.AwaitMasterAllBuilt;
+                            Utils.setForwardPressed(false);
+                            return;
+                        }
                     }
                 }
                 if (state.equals(State.Mining)) {
                     // Done Mining
                     if (SlaveSystem.isSlave()) {
-                        SlaveSystem.queueMasterDM("finished");
-                        state = State.AwaitSlaveNextMap;
-                        Utils.setBackwardPressed(false);
-                        return;
-                    }
-                    if (SlaveSystem.allSlavesFinished()) {
-                        endMining();
+                        checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
                     } else {
-                        info("Waiting for slaves to finish mining...");
-                        state = State.AwaitMasterAllMined;
-                        Utils.setBackwardPressed(false);
-                        return;
+                        if (SlaveSystem.allSlavesFinished()) {
+                            endMining();
+                        } else {
+                            info("Waiting for slaves to finish mining...");
+                            state = State.AwaitMasterAllMined;
+                            Utils.setBackwardPressed(false);
+                            return;
+                        }
                     }
                 }
             }
@@ -1367,6 +1375,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private boolean endBuilding() {
+        // Only executed on Master
         if (!knownErrors.isEmpty()) {
             if (errorAction.get() == ErrorAction.ToggleOff) {
                 knownErrors.clear();
@@ -1396,16 +1405,17 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     private void startMining() {
         calculateMiningPath(true);
-        if (!SlaveSystem.isSlave()) {
-            checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
-        } else {
-            SlaveSystem.startAllSlaves();
-        }
         refillMiningInventory();
         state = State.Walking;
+        if (!SlaveSystem.isSlave()) {
+            SlaveSystem.startAllSlaves();
+        }
     }
 
     private void endMining() {
+        // Only executed on Master
+        info("Finished mining map");
+        SlaveSystem.setAllSlavesUnfinished();
         checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
     }
 
