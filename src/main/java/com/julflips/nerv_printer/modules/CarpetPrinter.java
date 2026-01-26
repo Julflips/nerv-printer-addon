@@ -404,6 +404,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
     boolean closeNextInvPacket;
     State state;
     State oldState;
+    State debugPreviousState;
     Pair<Integer, Integer> workingInterval;     //Interval the bot should work in 0-127
     Pair<Integer, Integer> trueInterval;        //Stores the actual interval in case the old one is temporarily overwritten while repairing
     Pair<BlockPos, Vec3d> reset;
@@ -466,6 +467,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         closeResetChestTicks = 0;
         toBeSwappedSlot = -1;
         oldState = null;
+        debugPreviousState = null;
 
         setInterval(new Pair<>(0, 127));
         // Initialize Slave System settings
@@ -735,6 +737,11 @@ public class CarpetPrinter extends Module implements MapPrinter {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (state == null) return;
+
+        if (!state.equals(debugPreviousState)) {
+            debugPreviousState = state;
+            if (debugPrints.get()) info("State changed to: §a" + state);
+        }
 
         if (state.equals(State.AwaitMasterAllBuilt)) {
             if (SlaveSystem.allSlavesFinished()) {
