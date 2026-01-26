@@ -7,6 +7,8 @@ public interface MapPrinter {
 
     void setInterval(Pair<Integer, Integer> interval);
 
+    void mineLine(int minedLines);
+
     void addError(BlockPos relativeBlockPos);
 
     void pause();
@@ -18,4 +20,8 @@ public interface MapPrinter {
     void toggle();
 
     boolean getActivationReset();
+
+    void skipBuilding();
+
+    void slaveFinished(String slave);
 }

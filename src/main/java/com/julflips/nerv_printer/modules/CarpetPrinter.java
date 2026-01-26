@@ -861,7 +861,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         Vec3d goal = checkpoints.get(0).getLeft();
         if (PlayerUtils.distanceTo(goal.add(0, mc.player.getY() - goal.y, 0)) < checkpointBuffer.get()) {
             Pair<String, BlockPos> checkpointAction = checkpoints.get(0).getRight();
-            if (debugPrints.get() && checkpointAction.getLeft() != null) info("Reached " + checkpointAction.getLeft());
+            if (debugPrints.get() && checkpointAction.getLeft() != null) info("Reached: §a" + checkpointAction.getLeft());
             checkpoints.remove(0);
             switch (checkpointAction.getLeft()) {
                 case "lineEnd":
@@ -1321,6 +1321,12 @@ public class CarpetPrinter extends Module implements MapPrinter {
         return activationReset.get();
     }
 
+    public void skipBuilding() {}
+
+    public void mineLine(int lines) {}
+
+    public void slaveFinished(String slave) {}
+
     // Path Change Check
 
     private void warnPathChanged() {
@@ -1365,7 +1371,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
     }
 
     private void loadConfig(File configFile) {
-        if (configFile == null || !configFile.exists()) return;
+        if (configFile == null || !configFile.exists() || state == null) return;
         List<State> allowedStates = List.of(
             State.SelectingReset,
             State.SelectingChests,
@@ -1470,7 +1476,6 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
-        System.out.println("Using theme1: " + theme);
         WVerticalList list = theme.verticalList();
         WTable table = new WTable();
         list.add(table);
@@ -1508,7 +1513,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         WTable slaveTable = new WTable();
         list.add(slaveTable);
 
-        SlaveTableController slaveController = new SlaveTableController(slaveTable, theme);
+        SlaveTableController slaveController = new SlaveTableController(slaveTable, theme, false);
         slaveController.rebuild();
 
         SlaveSystem.tableController = slaveController;

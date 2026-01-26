@@ -93,7 +93,7 @@ public final class SlaveSystem {
                 activeSlavesDict.put(slave, true);
             }
         }
-        if (!printerModule.isActive() && !printerModule.getActivationReset()) printerModule.toggle();
+        if (printerModule != null && !printerModule.isActive() && !printerModule.getActivationReset()) printerModule.toggle();
     }
 
     public static void pauseAllSlaves() {
@@ -101,7 +101,12 @@ public final class SlaveSystem {
         for (String slave : activeSlavesDict.keySet()) {
             activeSlavesDict.put(slave, false);
         }
-        if (printerModule.isActive() && !printerModule.getActivationReset()) printerModule.toggle();
+        if (printerModule != null && printerModule.isActive() && !printerModule.getActivationReset()) printerModule.toggle();
+    }
+
+    public static void skipNextBuilding() {
+        sendToAllSlaves("skip");
+        if (printerModule != null) printerModule.skipBuilding();
     }
 
     public static void generateIntervals() {
@@ -207,6 +212,12 @@ public final class SlaveSystem {
                     master = null;
                     printerModule.toggle();
                     break;
+                case "skip":
+                    printerModule.skipBuilding();
+                    break;
+                case "mine":
+                    if (colonSplit.length < 2) break;
+                    printerModule.mineLine(Integer.valueOf(colonSplit[1]));
             }
         }
         // Client to Master message
@@ -222,6 +233,7 @@ public final class SlaveSystem {
                     if (tableController != null) tableController.rebuild();
                     break;
                 case "finished":
+                    printerModule.slaveFinished(sender);
                     finishedSlavesDict.put(sender, true);
                     activeSlavesDict.put(sender, false);
                     if (tableController != null) tableController.rebuild();

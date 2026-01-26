@@ -38,11 +38,9 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Pair;
 import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
 import org.apache.commons.lang3.tuple.Triple;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
@@ -403,10 +401,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     int jumpTimeout;
     int interactTimeout;
     int toBeSwappedSlot;
+    int minedLines;
     long lastTickTime;
     boolean closeNextInvPacket;
     State state;
     State oldState;
+    State debugPreviousState;
     Pair<Integer, Integer> workingInterval;     //Interval the bot should work in 0-127
     Pair<Integer, Integer> trueInterval;        //Stores the actual interval in case the old one is temporarily overwritten while repairing
     Pair<BlockPos, Vec3d> usedToolChest;
@@ -470,7 +470,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         jumpTimeout = 0;
         interactTimeout = 0;
         toBeSwappedSlot = -1;
+        minedLines = 128;
         oldState = null;
+        debugPreviousState = null;
 
         setInterval(new Pair<>(0, 127));
         // Initialize Slave System settings
@@ -790,6 +792,11 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void onTick(TickEvent.Pre event) {
         if (state == null) return;
 
+        if (!state.equals(debugPreviousState)) {
+            debugPreviousState = state;
+            if (debugPrints.get()) info("State changed to: §a" + state);
+        }
+
         if (state.equals(State.AwaitMasterAllBuilt)) {
             if (SlaveSystem.allSlavesFinished()) {
                 if (!endBuilding()) return;
@@ -883,13 +890,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, workingInterval, availableSlots.size(), map);
                 Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
                 refillBuildingInventory(invInformation.getRight());
-                if (checkpoints.isEmpty() && SlaveSystem.isSlave()) {
-                    SlaveSystem.queueMasterDM("finished");
-                    state = State.AwaitSlaveStartMine;
-                    Utils.setForwardPressed(false);
-                    return;
-                }
                 state = State.Walking;
+                if (SlaveSystem.isSlave() && checkpoints.isEmpty()) {
+                    refillMiningInventory();
+                }
             } else {
                 if (debugPrints.get())
                     info("Dumping §a" + mc.player.getInventory().getStack(dumpSlot).getName().getString() + " (slot " + dumpSlot + ")");
@@ -950,7 +954,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         Vec3d goal = checkpoints.get(0).getLeft();
         if (PlayerUtils.distanceTo(goal.add(0, mc.player.getY() - goal.y, 0)) < checkpointBuffer.get()) {
             Pair<String, BlockPos> checkpointAction = checkpoints.get(0).getRight();
-            if (debugPrints.get() && checkpointAction.getLeft() != null) info("Reached " + checkpointAction.getLeft());
+            if (debugPrints.get() && checkpointAction.getLeft() != null) info("Reached: §a" + checkpointAction.getLeft());
             if (snapToCheckpoints.get()) mc.player.setPosition(goal.x, mc.player.getY(), goal.z);
             checkpoints.remove(0);
             switch (checkpointAction.getLeft()) {
@@ -1003,11 +1007,21 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     Utils.setBackwardPressed(true);
                     break;
                 case "miningLineEnd":
-                    if (!checkpoints.isEmpty()) {
-                        state = State.Walking;
-                        Utils.setForwardPressed(true);
+                    if (SlaveSystem.isSlave()) {
                         Utils.setBackwardPressed(false);
-                        calculateMiningPath(false);
+                        state = State.AwaitSlaveMineLine;
+                        SlaveSystem.queueMasterDM("finished");
+                        return;
+                    } else {
+                        if (minedLines < map.length) {
+                            state = State.Walking;
+                            Utils.setForwardPressed(true);
+                            Utils.setBackwardPressed(false);
+                            calculateMiningPath(false);
+                        } else {
+                            state = State.AwaitMasterAllBuilt;
+                            return;
+                        }
                     }
                     break;
                 case "usedToolChest":
@@ -1019,7 +1033,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 if (state.equals(State.Walking)) {
                     // Done Building
                     if (SlaveSystem.isSlave()) {
-                        checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+                        checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
                     } else {
                         if (SlaveSystem.allSlavesFinished()) {
                             if (!endBuilding()) return;
@@ -1154,8 +1168,25 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void refillMiningInventory() {
         //Fills restockList with required mining tools
         restockList.clear();
-        HashMap<ItemStack, Integer> toolUseDict = new HashMap<>();
 
+        Set<ItemStack> requiredTools = new HashSet<>();
+        for (ItemStack toolStack : toolSet) {
+            boolean foundTool = false;
+            for (int slot : availableHotBarSlots) {
+                if (mc.player.getInventory().getStack(slot).equals(toolStack)) {
+                    foundTool = true;
+                    break;
+                }
+            }
+            if (!foundTool) requiredTools.add(toolStack);
+        }
+
+        for (ItemStack itemStack : requiredTools) {
+            restockList.add(0, Triple.of(itemStack.getItem().asItem(), 1, 1));
+            info("Restocking §a" + 1 + " " + itemStack.getItem().getName().getString());
+        }
+
+        /*HashMap<ItemStack, Integer> toolUseDict = new HashMap<>();
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
             for (int z = 0; z < 128; z++) {
                 BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
@@ -1177,7 +1208,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             int itemsNeeded = (int) Math.ceil((float) adjustedUses / (float) itemStack.getMaxDamage());
             info("Restocking §a" + itemsNeeded + " " + itemStack.getItem().getName().getString() + " (" + rawUses + " uses)");
             restockList.add(0, Triple.of(itemStack.getItem().asItem(), itemsNeeded, itemsNeeded));
-        }
+        }*/
 
         addClosestRestockCheckpoint();
     }
@@ -1219,6 +1250,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             checkedChests.clear();
             restockList.remove(0);
             addClosestRestockCheckpoint();
+            if (SlaveSystem.isSlave() && checkpoints.isEmpty()) {
+                // Finish building as slave
+                state = State.AwaitSlaveMineLine;
+                SlaveSystem.queueMasterDM("finished");
+                return;
+            }
         }
         timeoutTicks = postRestockDelay.get();
         state = State.Walking;
@@ -1288,7 +1325,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private BlockPos getNextBlockPos(boolean mining) {
-        for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
+         // For building: Get next block in working interval
+        // For mining: Get next block on current mining line
+        int relativeX = mc.player.getBlockX() - mapCorner.getX();
+        int lowerX = mining ? relativeX : workingInterval.getLeft();
+        int upperX = mining ? relativeX : workingInterval.getRight();
+        for (int x = lowerX; x <= upperX; x++) {
             for (int z = 0; z < 128; z++) {
                 int adjustedZ = mining ? 127 - z : z;
                 BlockPos blockPos = mapCorner.add(x, map[x][adjustedZ].getRight(), adjustedZ);
@@ -1311,8 +1353,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     // Path and Building Management
 
     private void calculateBuildingPath(boolean sprintFirst) {
-        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
-        //Fills checkpoints list
+        //Replace checkpoints with path for building (working interval)
         checkpoints.clear();
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
             boolean lineFinished = true;
@@ -1338,31 +1379,19 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private void calculateMiningPath(boolean sprintFirst) {
-        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
-        //Fills checkpoints list
+        //Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
-        for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
-            boolean lineFinished = true;
-            for (int z = 0; z < 128; z++) {
-                BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
-                if (!blockstate.isAir()) {
-                    lineFinished = false;
-                    break;
-                }
-            }
-            if (lineFinished) continue;
-
-            Vec3d cp1 = mapCorner.toCenterPos().add(x, 0.5, -2);
-            Vec3d cp2 = mapCorner.toCenterPos().add(x, map[x][Math.max(0, map[0].length-2)].getRight()+0.5, map[0].length-2);
-            checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
-            checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
-            checkpoints.add(new Pair(cp1, new Pair("miningLineEnd", null)));
-        }
-        if (checkpoints.size() > 0 && sprintFirst) {
+        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -2);
+        Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][Math.max(0, map[0].length-2)].getRight()+0.5, map[0].length-2);
+        checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
+        checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
+        checkpoints.add(new Pair(cp1, new Pair("miningLineEnd", null)));
+        if (!checkpoints.isEmpty() && sprintFirst) {
             //Make player sprint to the start of the map
             Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
             checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
         }
+        minedLines++;
     }
 
     private void startBuilding() {
@@ -1404,11 +1433,14 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private void startMining() {
+        minedLines = 0;
         calculateMiningPath(true);
         refillMiningInventory();
         state = State.Walking;
-        if (!SlaveSystem.isSlave()) {
-            SlaveSystem.startAllSlaves();
+        for (String slave : SlaveSystem.slaves) {
+            SlaveSystem.queueDM(slave, "mine:" + minedLines);
+            minedLines++;
+            SlaveSystem.activeSlavesDict.put(slave, true);
         }
     }
 
@@ -1523,13 +1555,35 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             state = oldState;
             return;
         }
-        if (state.equals(State.AwaitSlaveStartMine)) {
-            startMining();
-        }
     }
 
     public boolean getActivationReset() {
         return activationReset.get();
+    }
+
+    public void skipBuilding() {
+        if (SlaveSystem.isSlave()) {
+            state = State.AwaitSlaveMineLine;
+            Utils.setForwardPressed(false);
+        } else {
+            checkpoints.clear();
+            state = State.Walking;
+            endMining();
+        }
+    }
+
+    public void slaveFinished(String slave) {
+        if (minedLines < map.length) {
+            SlaveSystem.queueDM(slave, "mine:" + minedLines);
+            SlaveSystem.activeSlavesDict.put(slave, true);
+            minedLines++;
+        }
+    }
+
+    public void mineLine(int lines) {
+        minedLines = lines;
+        calculateMiningPath(true);
+        state = State.Walking;
     }
 
     // Path Change Check
@@ -1578,7 +1632,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private void loadConfig(File configFile) {
-        if (configFile == null || !configFile.exists()) return;
+        if (configFile == null || !configFile.exists() || state == null) return;
         List<State> allowedStates = List.of(
             State.SelectingChests,
             State.SelectingFinishedMapChest,
@@ -1736,7 +1790,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     @Override
     public WWidget getWidget(GuiTheme theme) {
-        System.out.println("Using theme1: " + theme);
         WVerticalList list = theme.verticalList();
         WTable table = new WTable();
         list.add(table);
@@ -1774,7 +1827,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         WTable slaveTable = new WTable();
         list.add(slaveTable);
 
-        SlaveTableController slaveController = new SlaveTableController(slaveTable, theme);
+        SlaveTableController slaveController = new SlaveTableController(slaveTable, theme, true);
         slaveController.rebuild();
 
         SlaveSystem.tableController = slaveController;
@@ -1864,7 +1917,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         AwaitMasterAllBuilt,
         AwaitMasterAllMined,
         AwaitSlaveContinue,
-        AwaitSlaveStartMine,
+        AwaitSlaveMineLine,
         AwaitSlaveNextMap,
         Walking,
         Mining,
