@@ -1215,8 +1215,14 @@ public class CarpetPrinter extends Module implements MapPrinter {
     private boolean endBuilding() {
         if (!knownErrors.isEmpty()) {
             if (errorAction.get() == ErrorAction.ToggleOff) {
+                workingInterval = new Pair<>(0, map.length-1);
+                info("Found errors: ");
+                for (int i = knownErrors.size()-1; i >= 0; i--) {
+                    info("Pos: " + knownErrors.get(i).toShortString());
+                }
                 knownErrors.clear();
                 checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
+                state = State.Walking;
                 warning("ErrorAction is ToggleOff: Stopping because of an error...");
                 toggle();
                 return false;

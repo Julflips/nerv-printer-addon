@@ -96,7 +96,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private final Setting<SprintMode> sprinting = sgGeneral.add(new EnumSetting.Builder<SprintMode>()
         .name("sprint-mode")
         .description("How to sprint.")
-        .defaultValue(SprintMode.NotPlacing)
+        .defaultValue(SprintMode.Off)
         .build()
     );
 
@@ -1422,8 +1422,14 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         // Only executed on Master
         if (!knownErrors.isEmpty()) {
             if (errorAction.get() == ErrorAction.ToggleOff) {
+                workingInterval = new Pair<>(0, map.length-1);
+                info("Found errors: ");
+                for (int i = knownErrors.size()-1; i >= 0; i--) {
+                    info("Pos: " + knownErrors.get(i).toShortString());
+                }
                 knownErrors.clear();
                 checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
+                state = State.Walking;
                 warning("ErrorAction is ToggleOff: Stopping because of error...");
                 toggle();
                 return false;
