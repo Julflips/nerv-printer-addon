@@ -80,7 +80,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         .description("The maximum range you can place blocks around yourself.")
         .defaultValue(1)
         .min(0.5)
-        .sliderRange(0.5, 3)
+        .sliderRange(0.5, 2)
         .build()
     );
 
@@ -778,12 +778,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     }
                 }
                 state = State.AwaitNBTFile;
-                if (SlaveSystem.isSlave()) {
-                    SlaveSystem.queueMasterDM("finished");
-                    state = State.AwaitSlaveNextMap;
-                    Utils.setBackwardPressed(false);
-                    return;
-                }
                 break;
         }
     }
@@ -864,6 +858,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
 
         if ((state.equals(State.Mining) || state.equals(State.AwaitBlockBreak)) && miningPos != null) {
+            // Break block if miningPos is not null. Stop walking if further away than maxMiningRange
             if (MapAreaCache.getCachedBlockState(miningPos).isAir()) {
                 miningPos = null;
                 state = State.Mining;
@@ -871,14 +866,40 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 mc.player.setPitch((float) Rotations.getPitch(miningPos));
                 BlockUtils.breakBlock(miningPos, true);
 
-                Vec3d centerPos = miningPos.toCenterPos();
-                if (PlayerUtils.distanceTo(centerPos.getX(), mc.player.getY(), centerPos.getZ()) >= maxMiningRange.get()) {
+                if (Math.abs(miningPos.getZ() - mc.player.getZ()) >= maxMiningRange.get()) {
                     state = State.AwaitBlockBreak;
                 }
+
                 if (state.equals(State.AwaitBlockBreak)) {
                     Utils.setForwardPressed(false);
                     Utils.setBackwardPressed(false);
                     return;
+                }
+            }
+        }
+
+        if (state.equals(State.Mining)) {
+            // Check if entire line has been mined
+            int relativeX = Math.abs(mc.player.getBlockX() - mapCorner.getX());
+            if  (isLineMined(relativeX)) {
+                miningPos = null;
+                if (SlaveSystem.isSlave()) {
+                    Utils.setBackwardPressed(false);
+                    state = State.AwaitSlaveMineLine;
+                    SlaveSystem.queueMasterDM("finished");
+                    return;
+                } else {
+                    if (minedLines < map.length) {
+                        state = State.Walking;
+                        Utils.setForwardPressed(true);
+                        Utils.setBackwardPressed(false);
+                        calculateMiningPath(false);
+                    } else {
+                        info("Waiting for slaves to finish mining...");
+                        state = State.AwaitMasterAllMined;
+                        Utils.setBackwardPressed(false);
+                        return;
+                    }
                 }
             }
         }
@@ -1007,23 +1028,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     Utils.setBackwardPressed(true);
                     break;
                 case "miningLineEnd":
-                    if (SlaveSystem.isSlave()) {
-                        Utils.setBackwardPressed(false);
-                        state = State.AwaitSlaveMineLine;
-                        SlaveSystem.queueMasterDM("finished");
-                        return;
-                    } else {
-                        if (minedLines < map.length) {
-                            state = State.Walking;
-                            Utils.setForwardPressed(true);
-                            Utils.setBackwardPressed(false);
-                            calculateMiningPath(false);
-                        } else {
-                            state = State.AwaitMasterAllBuilt;
-                            return;
-                        }
-                    }
-                    break;
+                    Utils.setBackwardPressed(false);
+                    checkpoints.add(new Pair(mc.player.getPos(), new Pair<>("miningLineEnd", null)));
+                    return;
                 case "usedToolChest":
                     state = State.AwaitUsedToolChestResponse;
                     interactWithBlock(usedToolChest.getLeft());
@@ -1041,21 +1048,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                             info("Waiting for slaves to finish placing...");
                             state = State.AwaitMasterAllBuilt;
                             Utils.setForwardPressed(false);
-                            return;
-                        }
-                    }
-                }
-                if (state.equals(State.Mining)) {
-                    // Done Mining
-                    if (SlaveSystem.isSlave()) {
-                        checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
-                    } else {
-                        if (SlaveSystem.allSlavesFinished()) {
-                            endMining();
-                        } else {
-                            info("Waiting for slaves to finish mining...");
-                            state = State.AwaitMasterAllMined;
-                            Utils.setBackwardPressed(false);
                             return;
                         }
                     }
@@ -1097,17 +1089,20 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 tryPlacingBlock(nextBlockPos);
             } else {
                 Vec3d centerPos = nextBlockPos.toCenterPos();
-                if (PlayerUtils.distanceTo(centerPos.getX(), mc.player.getY(), centerPos.getZ()) >= 0.4) {
+                if (Math.abs(centerPos.getZ() - mc.player.getZ()) >= 0.5) {
                     miningPos = nextBlockPos;
+                    mc.player.setPitch((float) Rotations.getPitch(miningPos));
                     BlockState blockState = mc.world.getBlockState(miningPos);
                     ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockState);
                     for (int slot : availableHotBarSlots) {
                         if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
                         Item item = mc.player.getInventory().getStack(slot).getItem();
                         if (item.equals(bestTool.getItem())) {
-                            mc.player.setPitch((float) Rotations.getPitch(miningPos));
+                            info("Best tool: " + bestTool.getItem().getName().getString());
+                            info("Is in slot: " + slot);
                             InvUtils.swap(slot, false);
                             BlockUtils.breakBlock(miningPos, true);
+                            state = State.Mining;
                             break;
                         }
                     }
@@ -1381,7 +1376,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void calculateMiningPath(boolean sprintFirst) {
         //Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
-        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -2);
+        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -1);
         Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][Math.max(0, map[0].length-2)].getRight()+0.5, map[0].length-2);
         checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
         checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
@@ -1391,10 +1386,30 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
             checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
         }
-        minedLines++;
+        advanceMinedLines();
+    }
+
+    private void advanceMinedLines() {
+        while (minedLines <= map.length) {
+            minedLines++;
+            if(!isLineMined(minedLines)) return;
+        }
+    }
+
+    private boolean isLineMined(int line) {
+        boolean isMined = true;
+        for (int z = 0; z < map[line].length; z++) {
+            BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(line, map[line][z].getRight(), z));
+            if (!blockstate.isAir()) {
+                isMined = false;
+                break;
+            }
+        }
+        return isMined;
     }
 
     private void startBuilding() {
+        info("Start building map");
         if (!SlaveSystem.isSlave()) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         MapAreaCache.reset(mapCorner);
@@ -1433,13 +1448,14 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private void startMining() {
+        info("Start mining map");
         minedLines = 0;
         calculateMiningPath(true);
         refillMiningInventory();
         state = State.Walking;
         for (String slave : SlaveSystem.slaves) {
             SlaveSystem.queueDM(slave, "mine:" + minedLines);
-            minedLines++;
+            advanceMinedLines();
             SlaveSystem.activeSlavesDict.put(slave, true);
         }
     }
@@ -1447,7 +1463,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void endMining() {
         // Only executed on Master
         info("Finished mining map");
-        SlaveSystem.setAllSlavesUnfinished();
+        SlaveSystem.startAllSlaves();
         checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
     }
 
@@ -1547,13 +1563,17 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     public void start() {
-        if (availableSlots.isEmpty() || state.equals(State.AwaitSlaveNextMap)) {
+        if (availableSlots.isEmpty()) {
             state = State.AwaitNBTFile;
             return;
         }
         if (state.equals(State.AwaitSlaveContinue)) {
             state = oldState;
             return;
+        }
+        if (state.equals(State.AwaitSlaveMineLine)) {
+            checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
+            state = State.Walking;
         }
     }
 
@@ -1566,17 +1586,15 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             state = State.AwaitSlaveMineLine;
             Utils.setForwardPressed(false);
         } else {
-            checkpoints.clear();
-            state = State.Walking;
-            endMining();
+            startMining();
         }
     }
 
     public void slaveFinished(String slave) {
         if (minedLines < map.length) {
             SlaveSystem.queueDM(slave, "mine:" + minedLines);
+            advanceMinedLines();
             SlaveSystem.activeSlavesDict.put(slave, true);
-            minedLines++;
         }
     }
 
@@ -1918,7 +1936,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         AwaitMasterAllMined,
         AwaitSlaveContinue,
         AwaitSlaveMineLine,
-        AwaitSlaveNextMap,
         Walking,
         Mining,
         Dumping

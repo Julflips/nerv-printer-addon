@@ -46,6 +46,14 @@ public final class SlaveTableController {
             rebuild();
         };
 
+        if (staircased) {
+            WButton skipNextBuilding = table.add(theme.button("Skip next building")).widget();
+            skipNextBuilding.action = () -> {
+                SlaveSystem.skipNextBuilding();
+                rebuild();
+            };
+        }
+
         table.row();
 
         if (!SlaveSystem.slaves.isEmpty()) {
@@ -70,14 +78,6 @@ public final class SlaveTableController {
                 SlaveSystem.removeSlave(slave);
                 rebuild();
             };
-
-            if (staircased) {
-                /*WButton skipNextBuilding = table.add(theme.button("Skip next building")).widget();
-                skipNextBuilding.action = () -> {
-                    SlaveSystem.skipNextBuilding();
-                    rebuild();
-                };*/
-            }
 
             table.row();
         }
