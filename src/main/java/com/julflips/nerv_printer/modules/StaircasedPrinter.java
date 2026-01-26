@@ -1030,7 +1030,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 case "miningLineEnd":
                     Utils.setBackwardPressed(false);
                     checkpoints.add(new Pair(mc.player.getPos(), new Pair<>("miningLineEnd", null)));
-                    return;
+                    break;
                 case "usedToolChest":
                     state = State.AwaitUsedToolChestResponse;
                     interactWithBlock(usedToolChest.getLeft());
@@ -1098,8 +1098,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                         if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
                         Item item = mc.player.getInventory().getStack(slot).getItem();
                         if (item.equals(bestTool.getItem())) {
-                            info("Best tool: " + bestTool.getItem().getName().getString());
-                            info("Is in slot: " + slot);
                             InvUtils.swap(slot, false);
                             BlockUtils.breakBlock(miningPos, true);
                             state = State.Mining;
@@ -1376,7 +1374,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void calculateMiningPath(boolean sprintFirst) {
         //Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
-        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -1);
+        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -2);
         Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][Math.max(0, map[0].length-2)].getRight()+0.5, map[0].length-2);
         checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
         checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
@@ -1397,6 +1395,8 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private boolean isLineMined(int line) {
+        if (minedLines >= map.length) return false;
+
         boolean isMined = true;
         for (int z = 0; z < map[line].length; z++) {
             BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(line, map[line][z].getRight(), z));
@@ -1457,14 +1457,20 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             SlaveSystem.queueDM(slave, "mine:" + minedLines);
             advanceMinedLines();
             SlaveSystem.activeSlavesDict.put(slave, true);
+            SlaveSystem.finishedSlavesDict.put(slave, false);
         }
     }
 
     private void endMining() {
         // Only executed on Master
         info("Finished mining map");
-        SlaveSystem.startAllSlaves();
+        SlaveSystem.sendToAllSlaves("start");
+        for (String slave : SlaveSystem.activeSlavesDict.keySet()) {
+            SlaveSystem.activeSlavesDict.put(slave, true);
+        }
+        SlaveSystem.setAllSlavesUnfinished();
         checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
+        state = State.Walking;
     }
 
     public ArrayList<BlockPos> getInvalidPlacements() {
@@ -1595,6 +1601,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             SlaveSystem.queueDM(slave, "mine:" + minedLines);
             advanceMinedLines();
             SlaveSystem.activeSlavesDict.put(slave, true);
+            SlaveSystem.finishedSlavesDict.put(slave, false);
         }
     }
 
@@ -1867,7 +1874,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
         event.renderer.box(mapCorner.getX(), mapCorner.getY(), mapCorner.getZ(), mapCorner.getX() + 128, mapCorner.getY(), mapCorner.getZ() + 128, color.get(), color.get(), ShapeMode.Lines, 0);
 
-        if (renderMap.get() && !state.equals(State.Mining)) {
+        if (renderMap.get() && !(state.equals(State.Mining) || state.equals(State.AwaitBlockBreak))) {
             for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
                 for (int z = 0; z < map[0].length; z++) {
                     BlockPos renderPos = mapCorner.add(x, map[x][z].getRight(), z);

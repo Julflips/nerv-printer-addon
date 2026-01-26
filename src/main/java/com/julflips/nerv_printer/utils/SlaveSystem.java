@@ -29,11 +29,11 @@ public final class SlaveSystem {
     public static int randomLength = 0;
     public static ArrayList<String> slaves = new ArrayList<>();
     public static HashMap<String, Boolean> activeSlavesDict = new HashMap<>();
+    public static HashMap<String, Boolean> finishedSlavesDict = new HashMap<>();
     public static SlaveTableController tableController = null;
 
     private static MapPrinter printerModule = null;
     private static int timeout = 0;
-    private static HashMap<String, Boolean> finishedSlavesDict = new HashMap<>();
     private static ArrayList<String> toBeSentMessages = new ArrayList<>();
     private static ArrayList<String> toBeConfirmedSlaves = new ArrayList<>();
     private static String master = null;
@@ -233,9 +233,9 @@ public final class SlaveSystem {
                     if (tableController != null) tableController.rebuild();
                     break;
                 case "finished":
-                    printerModule.slaveFinished(sender);
                     finishedSlavesDict.put(sender, true);
                     activeSlavesDict.put(sender, false);
+                    printerModule.slaveFinished(sender);
                     if (tableController != null) tableController.rebuild();
                     break;
                 case "error":
