@@ -10,15 +10,16 @@ import java.util.Set;
 public final class ToolUtils {
 
     public static ItemStack getBestTool(Set<ItemStack> tools, BlockState targetBlock) {
-        float bestScore = -Float.MAX_VALUE;
+        // 1 is the default mining multiplier
+        float bestScore = 1;
         ItemStack bestStack = null;
         for (ItemStack tool : tools) {
-            if (!tool.isSuitableFor(targetBlock)) continue;
             if (tool.getMiningSpeedMultiplier(targetBlock) > bestScore) {
                 bestScore = tool.getMiningSpeedMultiplier(targetBlock);
                 bestStack = tool;
             }
         }
+        // Default to Pickaxe if no tool increases the mining speed
         if (bestStack == null) {
             for (ItemStack tool : tools) {
                 if (tool.isIn(ItemTags.PICKAXES)) {
