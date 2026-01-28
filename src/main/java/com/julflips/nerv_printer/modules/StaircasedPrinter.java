@@ -873,6 +873,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 if (state.equals(State.AwaitBlockBreak)) {
                     Utils.setForwardPressed(false);
                     Utils.setBackwardPressed(false);
+                    Utils.setJumpPressed(false);
                     return;
                 }
             }
@@ -962,7 +963,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             Direction direction = Direction.fromHorizontalDegrees(mc.player.getYaw());
             if (mc.options.backKey.isPressed()) direction = direction.getOpposite();
             BlockPos target = mc.player.getBlockPos().offset(direction);
-            if (miningPos == null && mc.player.isOnGround() && !mc.world.getBlockState(target).isAir()
+            if (mc.player.isOnGround() && !mc.world.getBlockState(target).isAir()
                 && mc.world.getBlockState(target.up(1)).isAir() && mc.world.getBlockState(target.up(2)).isAir()) {
                 jumpTimeout = jumpCoolDown.get();
                 Utils.setJumpPressed(true);
@@ -1084,25 +1085,28 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
         if (miningPos != null || nextBlockPos == null) return;
 
-        if (PlayerUtils.distanceTo(nextBlockPos.toCenterPos()) <= interactionRange.get()) {
-            if (state.equals(State.Walking)) {
+        if (state.equals(State.Walking)) {
+            if (PlayerUtils.distanceTo(nextBlockPos.toCenterPos()) <= interactionRange.get()) {
                 tryPlacingBlock(nextBlockPos);
-            } else {
-                Vec3d centerPos = nextBlockPos.toCenterPos();
-                if (Math.abs(centerPos.getZ() - mc.player.getZ()) >= 0.5) {
-                    miningPos = nextBlockPos;
-                    mc.player.setPitch((float) Rotations.getPitch(miningPos));
-                    BlockState blockState = mc.world.getBlockState(miningPos);
-                    ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockState);
-                    for (int slot : availableHotBarSlots) {
-                        if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
-                        Item item = mc.player.getInventory().getStack(slot).getItem();
-                        if (item.equals(bestTool.getItem())) {
-                            InvUtils.swap(slot, false);
-                            BlockUtils.breakBlock(miningPos, true);
-                            state = State.Mining;
-                            break;
+            }
+        } else {
+            Vec3d centerPos = nextBlockPos.toCenterPos();
+            if (Math.abs(centerPos.getZ() - mc.player.getZ()) >= 0.5) {
+                miningPos = nextBlockPos;
+                mc.player.setPitch((float) Rotations.getPitch(miningPos));
+                BlockState blockState = mc.world.getBlockState(miningPos);
+                ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockState);
+                for (int slot : availableHotBarSlots) {
+                    if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
+                    Item item = mc.player.getInventory().getStack(slot).getItem();
+                    if (item.equals(bestTool.getItem())) {
+                        InvUtils.swap(slot, false);
+                        BlockUtils.breakBlock(miningPos, true);
+                        state = State.Mining;
+                        if (Math.abs(miningPos.getZ() - mc.player.getZ()) >= maxMiningRange.get()) {
+                            state = State.AwaitBlockBreak;
                         }
+                        break;
                     }
                 }
             }
@@ -1372,10 +1376,15 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private void calculateMiningPath(boolean sprintFirst) {
-        //Replace checkpoints with path for mining (next single line)
+        // Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
         Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -2);
-        Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][Math.max(0, map[0].length-2)].getRight()+0.5, map[0].length-2);
+        Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][0].getRight()+0.5, -1);
+        for (int i = 0; i < map[minedLines].length-1; i++) {
+            BlockPos cp2BlockPos = mapCorner.add(minedLines, map[minedLines][i].getRight(), i);
+            if (mc.world.getBlockState(cp2BlockPos).isAir()) break;
+            cp2 = cp2BlockPos.toCenterPos().add(0, 0.5, 0);
+        }
         checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
         checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
         checkpoints.add(new Pair(cp1, new Pair("miningLineEnd", null)));
