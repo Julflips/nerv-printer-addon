@@ -801,7 +801,22 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
         if (state.equals(State.AwaitMasterAllMined)) {
             if (SlaveSystem.allSlavesFinished()) {
-                endMining();
+                minedLines = -1;
+                advanceMinedLines();
+                if (minedLines >= map.length) {
+                    endMining();
+                } else {
+                    info("Not all lines mined. Redo mining.");
+                    calculateMiningPath();
+                    state = State.Walking;
+                    for (String slave : SlaveSystem.slaves) {
+                        if (minedLines >= map.length) break;
+                        SlaveSystem.queueDM(slave, "mine:" + minedLines);
+                        advanceMinedLines();
+                        SlaveSystem.activeSlavesDict.put(slave, true);
+                        SlaveSystem.finishedSlavesDict.put(slave, false);
+                    }
+                }
             } else {
                 return;
             }
@@ -894,7 +909,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                         state = State.Walking;
                         Utils.setForwardPressed(true);
                         Utils.setBackwardPressed(false);
-                        calculateMiningPath(false);
+                        calculateMiningPath();
                     } else {
                         info("Waiting for slaves to finish mining...");
                         state = State.AwaitMasterAllMined;
@@ -1076,10 +1091,8 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         } else if (sprinting.get() != SprintMode.Off) {
             mc.player.setSprinting(true);
         }
-
-        // Don't mine/place on certain next actions
-        if (nextAction == "refill" || nextAction == "dump" || nextAction == "walkRestock"
-            || nextAction == "miningLineStart" || nextAction == "startMine") return;
+        final List<String> allowPlaceActions = Arrays.asList("", "lineEnd", "sprint", "miningLineEnd");
+        if (!allowPlaceActions.contains(nextAction)) return;
 
         BlockPos nextBlockPos = getNextBlockPos(state.equals(State.Mining));
 
@@ -1375,7 +1388,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
     }
 
-    private void calculateMiningPath(boolean sprintFirst) {
+    private void calculateMiningPath() {
         // Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
         Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -2);
@@ -1388,11 +1401,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
         checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
         checkpoints.add(new Pair(cp1, new Pair("miningLineEnd", null)));
-        if (!checkpoints.isEmpty() && sprintFirst) {
-            //Make player sprint to the start of the map
-            Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
-            checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
-        }
+
         advanceMinedLines();
     }
 
@@ -1404,7 +1413,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private boolean isLineMined(int line) {
-        if (minedLines >= map.length) return false;
+        if (line >= map.length) return false;
 
         boolean isMined = true;
         for (int z = 0; z < map[line].length; z++) {
@@ -1464,11 +1473,13 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     private void startMining() {
         info("Start mining map");
-        minedLines = 0;
-        calculateMiningPath(true);
+        minedLines = -1;
+        advanceMinedLines();
+        calculateMiningPath();
         refillMiningInventory();
         state = State.Walking;
         for (String slave : SlaveSystem.slaves) {
+            if (minedLines >= map.length) break;
             SlaveSystem.queueDM(slave, "mine:" + minedLines);
             advanceMinedLines();
             SlaveSystem.activeSlavesDict.put(slave, true);
@@ -1484,6 +1495,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             SlaveSystem.activeSlavesDict.put(slave, true);
         }
         SlaveSystem.setAllSlavesUnfinished();
+        checkpoints.clear();
         checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
         state = State.Walking;
     }
@@ -1593,6 +1605,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             return;
         }
         if (state.equals(State.AwaitSlaveMineLine)) {
+            checkpoints.clear();
             checkpoints.add(0, new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
             state = State.Walking;
         }
@@ -1622,7 +1635,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     public void mineLine(int lines) {
         minedLines = lines;
-        calculateMiningPath(true);
+        calculateMiningPath();
         state = State.Walking;
     }
 
