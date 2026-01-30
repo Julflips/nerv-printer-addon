@@ -799,6 +799,14 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             }
         }
 
+        if (state.equals(State.AwaitMasterAllBuiltSkip)) {
+            if (SlaveSystem.allSlavesFinished()) {
+                startMining();
+            } else {
+                return;
+            }
+        }
+
         if (state.equals(State.AwaitMasterAllMined)) {
             if (SlaveSystem.allSlavesFinished()) {
                 minedLines = -1;
@@ -924,12 +932,13 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         if (state == State.Dumping) {
             int dumpSlot = getDumpSlot();
             if (dumpSlot == -1) {
-                HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, workingInterval, availableSlots.size(), map);
-                Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
-                refillBuildingInventory(invInformation.getRight());
                 state = State.Walking;
                 if (SlaveSystem.isSlave() && checkpoints.isEmpty()) {
                     refillMiningInventory();
+                } else {
+                    HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, workingInterval, availableSlots.size(), map);
+                    Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
+                    refillBuildingInventory(invInformation.getRight());
                 }
             } else {
                 if (debugPrints.get())
@@ -1393,10 +1402,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         checkpoints.clear();
         Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -2);
         Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][0].getRight()+0.5, -1);
-        for (int i = 0; i < map[minedLines].length-1; i++) {
-            BlockPos cp2BlockPos = mapCorner.add(minedLines, map[minedLines][i].getRight(), i);
-            if (mc.world.getBlockState(cp2BlockPos).isAir()) break;
-            cp2 = cp2BlockPos.toCenterPos().add(0, 0.5, 0);
+        for (int i = 0; i < map[minedLines].length-2; i++) {
+            BlockPos airPos = mapCorner.add(minedLines, map[minedLines][i+2].getRight(), i+2);
+            cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][i].getRight()+0.5, i);
+            if (mc.world.getBlockState(airPos).isAir()) break;
         }
         checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
         checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
@@ -1618,9 +1627,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     public void skipBuilding() {
         if (availableSlots.isEmpty()) setupSlots();
         knownErrors.clear();
-        state = State.Walking;
+        checkpoints.clear();
         if (SlaveSystem.isSlave()) {
             checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+            state = State.Walking;
         } else {
             try {
                 if (moveToFinishedFolder.get())
@@ -1629,7 +1639,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
                 e.printStackTrace();
             }
-            refillMiningInventory();
+            state = State.AwaitMasterAllBuiltSkip;
         }
     }
 
@@ -1977,6 +1987,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         AwaitNBTFile,
         AwaitBlockBreak,
         AwaitMasterAllBuilt,
+        AwaitMasterAllBuiltSkip,
         AwaitMasterAllMined,
         AwaitSlaveContinue,
         AwaitSlaveMineLine,
