@@ -1616,11 +1616,20 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     public void skipBuilding() {
+        if (availableSlots.isEmpty()) setupSlots();
+        knownErrors.clear();
+        state = State.Walking;
         if (SlaveSystem.isSlave()) {
-            state = State.AwaitSlaveMineLine;
-            Utils.setForwardPressed(false);
+            checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         } else {
-            startMining();
+            try {
+                if (moveToFinishedFolder.get())
+                    mapFile.renameTo(new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName()));
+            } catch (Exception e) {
+                warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
+                e.printStackTrace();
+            }
+            refillMiningInventory();
         }
     }
 
