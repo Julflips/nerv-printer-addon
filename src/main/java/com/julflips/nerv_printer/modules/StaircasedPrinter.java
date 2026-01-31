@@ -326,7 +326,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private final Setting<ErrorAction> errorAction = sgError.add(new EnumSetting.Builder<ErrorAction>()
         .name("error-action")
         .description("What to do when a misplacement is detected.")
-        .defaultValue(ErrorAction.ToggleOff)
+        .defaultValue(ErrorAction.Ignore)
         .build()
     );
 
@@ -802,6 +802,18 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         if (state.equals(State.AwaitMasterAllBuiltSkip)) {
             if (SlaveSystem.allSlavesFinished()) {
                 startMining();
+            } else {
+                return;
+            }
+        }
+
+        if (state.equals(State.AwaitManualRepair)) {
+            // Refresh known errors
+            knownErrors.clear();
+            knownErrors.addAll(getInvalidPlacements());
+            if (knownErrors.isEmpty()) {
+                checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
+                state = State.Walking;
             } else {
                 return;
             }
@@ -1448,17 +1460,15 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private boolean endBuilding() {
         // Only executed on Master
         if (!knownErrors.isEmpty()) {
-            if (errorAction.get() == ErrorAction.ToggleOff) {
+            if (errorAction.get() == ErrorAction.ManualRepair) {
                 workingInterval = new Pair<>(0, map.length-1);
                 info("Found errors: ");
                 for (int i = knownErrors.size()-1; i >= 0; i--) {
                     info("Pos: " + knownErrors.get(i).toShortString());
                 }
-                knownErrors.clear();
-                checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
-                state = State.Walking;
-                warning("ErrorAction is ToggleOff: Stopping because of error...");
-                toggle();
+                state = State.AwaitManualRepair;
+                Utils.setForwardPressed(false);
+                warning("ErrorAction is ManualRepair. The module resumes when all errors are fixed. All errors are highlighted");
                 return false;
             }
         }
@@ -1931,6 +1941,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             }
         }
 
+        if (knownErrors != null) {
+            for (BlockPos pos : knownErrors) {
+                event.renderer.box(pos, color.get(), color.get(), ShapeMode.Lines, 0);
+            }
+        }
+
         ArrayList<Pair<BlockPos, Vec3d>> renderedPairs = new ArrayList<>();
         for (ArrayList<Pair<BlockPos, Vec3d>> list : materialDict.values()) {
             renderedPairs.addAll(list);
@@ -1991,6 +2007,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         AwaitMasterAllMined,
         AwaitSlaveContinue,
         AwaitSlaveMineLine,
+        AwaitManualRepair,
         Walking,
         Mining,
         Dumping
@@ -2004,6 +2021,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     private enum ErrorAction {
         Ignore,
-        ToggleOff
+        ManualRepair
     }
 }
