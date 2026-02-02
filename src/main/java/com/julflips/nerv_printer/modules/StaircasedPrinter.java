@@ -1601,9 +1601,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         trueInterval = interval;
     }
 
-    public void addError(BlockPos relativeBlockPos) {
-        BlockPos absoluteErrorPos = mapCorner.add(relativeBlockPos);
-        if (!knownErrors.contains(absoluteErrorPos)) knownErrors.add(absoluteErrorPos);
+    public void addError(BlockPos relPos) {
+        BlockPos absPos = mapCorner.add(relPos.getX(), map[relPos.getX()][relPos.getZ()].getRight(), relPos.getZ());
+        if (!knownErrors.contains(absPos)) knownErrors.add(new BlockPos(absPos));
     }
 
     public void pause() {
