@@ -22,6 +22,8 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.*;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.enchantment.Enchantments;
 import net.minecraft.item.*;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtIo;
@@ -214,19 +216,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         .build()
     );
 
-    private final Setting<Integer> minDurabilityPercentage = sgAdvanced.add(new IntSetting.Builder()
-        .name("min-durability")
-        .description("How many ticks to wait after the player position was reset by the server.")
-        .defaultValue(2)
+    private final Setting<Double> durabilityBuffer = sgAdvanced.add(new DoubleSetting.Builder()
+        .name("durability-buffer")
+        .description("The additional required durability for restocked mining tools on top of the predicted one (in %).")
+        .defaultValue(0.2)
         .min(0)
-        .sliderRange(0, 90)
-        .build()
-    );
-
-    private final Setting<Boolean> snapToCheckpoints = sgAdvanced.add(new BoolSetting.Builder()
-        .name("snap-to-checkpoints")
-        .description("Snap to checkpoints when getting close.")
-        .defaultValue(false)
+        .sliderRange(0, 1)
         .build()
     );
 
@@ -236,6 +231,13 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         .defaultValue(0.2)
         .min(0)
         .sliderRange(0, 1)
+        .build()
+    );
+
+    private final Setting<Boolean> snapToCheckpoints = sgAdvanced.add(new BoolSetting.Builder()
+        .name("snap-to-checkpoints")
+        .description("Snap to checkpoints when getting close.")
+        .defaultValue(false)
         .build()
     );
 
@@ -1197,28 +1199,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private void refillMiningInventory() {
-        //Fills restockList with required mining tools
+        // Fills restockList with required mining tools
         restockList.clear();
 
-        Set<ItemStack> requiredTools = new HashSet<>();
-        for (ItemStack toolStack : toolSet) {
-            boolean foundTool = false;
-            for (int slot : availableHotBarSlots) {
-                if (mc.player.getInventory().getStack(slot).equals(toolStack)) {
-                    foundTool = true;
-                    break;
-                }
-            }
-            if (!foundTool) requiredTools.add(toolStack);
-        }
-
-        for (ItemStack itemStack : requiredTools) {
-            restockList.add(0, Triple.of(itemStack.getItem().asItem(), 1, 1));
-            info("Restocking §a" + 1 + " " + itemStack.getItem().getName().getString());
-        }
-
-        /*HashMap<ItemStack, Integer> toolUseDict = new HashMap<>();
-        for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
+        // Calculate total uses per tool
+        HashMap<ItemStack, Integer> toolUseDict = new HashMap<>();
+        for (int x = 0; x < map.length; x++) {
             for (int z = 0; z < 128; z++) {
                 BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
                 if (!blockstate.isAir()) {
@@ -1234,12 +1220,21 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
 
         for (ItemStack itemStack : toolUseDict.keySet()) {
+            // Fetch unbreaking level
+            int unbreakingLevel = 0;
+            for (var e : EnchantmentHelper.getEnchantments(itemStack).getEnchantmentEntries()) {
+                if (!e.getKey().getKey().isPresent()) continue;
+                if (e.getKey().getKey().get().getValue().equals(Enchantments.UNBREAKING.getValue())) {
+                    unbreakingLevel = e.getIntValue();
+                }
+            }
             int rawUses = toolUseDict.get(itemStack);
-            int adjustedUses = (int) Math.ceil(rawUses / 4);
-            int itemsNeeded = (int) Math.ceil((float) adjustedUses / (float) itemStack.getMaxDamage());
+            float slaveModifier = (float) (trueInterval.getRight() - trueInterval.getLeft() + 1) / (float) map.length;
+            double adjustedUses = (float) rawUses / (float) (unbreakingLevel+1) * durabilityBuffer.get() * slaveModifier;
+            int itemsNeeded = (int) Math.ceil( adjustedUses / (float) itemStack.getMaxDamage());
             info("Restocking §a" + itemsNeeded + " " + itemStack.getItem().getName().getString() + " (" + rawUses + " uses)");
             restockList.add(0, Triple.of(itemStack.getItem().asItem(), itemsNeeded, itemsNeeded));
-        }*/
+        }
 
         addClosestRestockCheckpoint();
     }
@@ -1414,9 +1409,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         checkpoints.clear();
         Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -2);
         Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][0].getRight()+0.5, -1);
-        for (int i = 0; i < map[minedLines].length-2; i++) {
-            BlockPos airPos = mapCorner.add(minedLines, map[minedLines][i+2].getRight(), i+2);
+        for (int i = 0; i < map[minedLines].length-1; i++) {
             cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][i].getRight()+0.5, i);
+            if (i+2 >= map[minedLines].length) break;
+            BlockPos airPos = mapCorner.add(minedLines, map[minedLines][i+2].getRight(), i+2);
             if (mc.world.getBlockState(airPos).isAir()) break;
         }
         checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
