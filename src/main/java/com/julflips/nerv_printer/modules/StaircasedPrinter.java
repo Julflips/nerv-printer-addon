@@ -1127,7 +1127,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             }
         } else {
             Vec3d centerPos = nextBlockPos.toCenterPos();
-            if (Math.abs(centerPos.getZ() - mc.player.getZ()) >= 0.5) {
+            if (centerPos.getZ() - mc.player.getZ() > 0.5) {
                 miningPos = nextBlockPos;
                 mc.player.setPitch((float) Rotations.getPitch(miningPos));
                 BlockState blockState = mc.world.getBlockState(miningPos);
