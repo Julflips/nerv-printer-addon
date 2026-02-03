@@ -49,6 +49,8 @@ import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class StaircasedPrinter extends Module implements MapPrinter {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -675,8 +677,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             case AwaitRestockResponse:
                 interactTimeout = 0;
                 boolean foundMaterials = false;
-                for (int i = 0; i < packet.contents().size() - 36; i++) {
-                    ItemStack stack = packet.contents().get(i);
+                List<Integer> slots = IntStream.rangeClosed(0, packet.contents().size() - 37)
+                    .boxed()
+                    .collect(Collectors.toList());
+                Collections.shuffle(slots);
+                for (int slot : slots) {
+                    ItemStack stack = packet.contents().get(slot);
 
                     if (restockList.get(0).getMiddle() == 0) {
                         foundMaterials = true;
@@ -692,7 +698,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                             state = State.Walking;
                             return;
                         }
-                        restockBacklogSlots.add(i);
+                        restockBacklogSlots.add(slot);
                         Triple<Item, Integer, Integer> oldTriple = restockList.remove(0);
                         restockList.add(0, Triple.of(oldTriple.getLeft(), oldTriple.getMiddle() - 1, oldTriple.getRight() - 64));
                     }
