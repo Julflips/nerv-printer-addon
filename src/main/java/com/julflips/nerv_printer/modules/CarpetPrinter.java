@@ -780,6 +780,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
         if (timeoutTicks > 0) {
             if (mc.player.isOnGround()) timeoutTicks--;
+            Utils.setForwardPressed(false);
             return;
         }
 

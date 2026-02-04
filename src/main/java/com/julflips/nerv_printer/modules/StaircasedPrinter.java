@@ -888,6 +888,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
         if (timeoutTicks > 0) {
             if (mc.player.isOnGround()) timeoutTicks--;
+            Utils.setForwardPressed(false);
+            Utils.setBackwardPressed(false);
+            Utils.setJumpPressed(false);
             return;
         }
 
@@ -1361,7 +1364,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 lastSwappedMaterial = material;
                 toBeSwappedSlot = slot;
                 Utils.setForwardPressed(false);
-                mc.player.setVelocity(0, 0, 0);
+                mc.player.setVelocity(mc.player.getVelocity().x, mc.player.getVelocity().y, 0);
                 timeoutTicks = preSwapDelay.get();
                 return;
             }
