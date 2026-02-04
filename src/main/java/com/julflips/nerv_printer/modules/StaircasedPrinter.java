@@ -118,9 +118,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         .build()
     );
 
-    private final Setting<Boolean> rotateMine = sgGeneral.add(new BoolSetting.Builder()
-        .name("mine-place")
-        .description("Rotate when mining a block.")
+    private final Setting<Boolean> sleep = sgGeneral.add(new BoolSetting.Builder()
+        .name("sleep")
+        .description("Sleep in bed when starting a map to avoid Phantoms.")
         .defaultValue(true)
         .build()
     );
@@ -416,6 +416,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     Pair<BlockPos, Vec3d> usedToolChest;
     Pair<BlockPos, Vec3d> cartographyTable;
     Pair<BlockPos, Vec3d> finishedMapChest;
+    Pair<BlockPos, Vec3d> bed;
     ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests;
     Pair<Vec3d, Pair<Float, Float>> dumpStation;                    //Pos, Yaw, Pitch
     BlockPos mapCorner;
@@ -465,6 +466,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         miningPos = null;
         cartographyTable = null;
         finishedMapChest = null;
+        bed = null;
         mapMaterialChests = new ArrayList<>();
         dumpStation = null;
         lastSwappedMaterial = null;
@@ -572,7 +574,20 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof AbstractChestBlock) {
                     usedToolChest = new Pair<>(blockPos, mc.player.getPos());
-                    info("Used Pickaxe Chest selected. Select all §aMaterial-, Tool-, and Map-Chests.");
+                    if (sleep.get()) {
+                        info("Used Pickaxe Chest selected. Select the §abed used for sleeping.");
+                        state = State.SelectingBed;
+                    } else {
+                        info("Used Pickaxe Chest selected. Select all §aMaterial-, Tool-, and Map-Chests.");
+                        state = State.SelectingChests;
+                    }
+                }
+                break;
+            case SelectingBed:
+                blockPos = packet.getBlockHitResult().getBlockPos();
+                if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof BedBlock) {
+                    bed = new Pair<>(blockPos, mc.player.getPos());
+                    info("Bed selected. Select all §aMaterial-, Tool-, and Map-Chests.");
                     state = State.SelectingChests;
                 }
                 break;
@@ -872,7 +887,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
 
         if (timeoutTicks > 0) {
-            timeoutTicks--;
+            if (mc.player.isOnGround()) timeoutTicks--;
             return;
         }
 
@@ -1062,6 +1077,11 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     Utils.setForwardPressed(false);
                     mc.player.setYaw(dumpStation.getRight().getLeft());
                     mc.player.setPitch(dumpStation.getRight().getRight());
+                    return;
+                case "sleep":
+                    interactWithBlock(bed.getLeft());
+                    interactTimeout = 0;
+                    mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SLEEPING));
                     return;
                 case "refill":
                     state = State.AwaitRestockResponse;
@@ -1456,6 +1476,13 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         MapAreaCache.reset(mapCorner);
         calculateBuildingPath(true);
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+        if (sleep.get()) {
+            if (bed == null) {
+                warning("Can not sleep because bed was not set.");
+            } else {
+                checkpoints.add(0, new Pair(bed.getRight(), new Pair("sleep", null)));
+            }
+        }
         state = State.Walking;
     }
 
@@ -1698,6 +1725,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 cartographyTable,
                 finishedMapChest,
                 usedToolChest,
+                bed,
                 mapMaterialChests,
                 dumpStation,
                 mapCorner,
@@ -1719,6 +1747,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         if (configFile == null || !configFile.exists() || state == null) return;
         List<State> allowedStates = List.of(
             State.SelectingChests,
+            State.SelectingBed,
             State.SelectingFinishedMapChest,
             State.SelectingUsedPickaxeChest,
             State.SelectingDumpStation,
@@ -1747,6 +1776,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             this.cartographyTable = data.cartographyTable;
             this.finishedMapChest = data.finishedMapChest;
             this.usedToolChest = data.usedToolChest;
+            this.bed = data.bed;
             this.mapMaterialChests = data.mapMaterialChests;
             this.dumpStation = data.dumpStation;
             this.mapCorner = data.mapCorner;
@@ -1975,6 +2005,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 event.renderer.box(usedToolChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
                 event.renderer.box(usedToolChest.getRight().x - indicatorSize.get(), usedToolChest.getRight().y - indicatorSize.get(), usedToolChest.getRight().z - indicatorSize.get(), usedToolChest.getRight().getX() + indicatorSize.get(), usedToolChest.getRight().getY() + indicatorSize.get(), usedToolChest.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
             }
+            if (bed != null) {
+                event.renderer.box(bed.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+                event.renderer.box(bed.getRight().x - indicatorSize.get(), bed.getRight().y - indicatorSize.get(), bed.getRight().z - indicatorSize.get(), bed.getRight().getX() + indicatorSize.get(), bed.getRight().getY() + indicatorSize.get(), bed.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+            }
             if (cartographyTable != null) {
                 event.renderer.box(cartographyTable.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
                 event.renderer.box(cartographyTable.getRight().x - indicatorSize.get(), cartographyTable.getRight().y - indicatorSize.get(), cartographyTable.getRight().z - indicatorSize.get(), cartographyTable.getRight().getX() + indicatorSize.get(), cartographyTable.getRight().getY() + indicatorSize.get(), cartographyTable.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
@@ -1995,6 +2029,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         SelectingUsedPickaxeChest,
         SelectingDumpStation,
         SelectingFinishedMapChest,
+        SelectingBed,
         SelectingChests,
         AwaitRegisterResponse,
         AwaitRestockResponse,

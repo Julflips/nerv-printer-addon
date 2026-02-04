@@ -53,6 +53,7 @@ public final class ConfigDeserializer {
         public Pair<BlockPos, Vec3d> cartographyTable;
         public Pair<BlockPos, Vec3d> finishedMapChest;
         public Pair<BlockPos, Vec3d> usedToolChest;
+        public Pair<BlockPos, Vec3d> bed;
         public ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests;
         public Pair<Vec3d, Pair<Float, Float>> dumpStation;
         public BlockPos mapCorner;
@@ -84,6 +85,8 @@ public final class ConfigDeserializer {
             data.finishedMapChest = obj != null ? jsonToBlockPosVecPair(obj) : null;
             obj = getObj(root, "usedToolChest");
             data.usedToolChest = obj != null ? jsonToBlockPosVecPair(obj) : null;
+            obj = getObj(root, "bed");
+            data.bed = obj != null ? jsonToBlockPosVecPair(obj) : null;
 
             data.mapMaterialChests = new ArrayList<>();
             if (root.has("mapMaterialChests")) {

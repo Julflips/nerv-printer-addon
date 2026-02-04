@@ -56,7 +56,7 @@ public final class ConfigSerializer {
         BlockPos mapCorner,
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict
     ) throws IOException {
-        writeToJson(file, type, reset, cartographyTable, finishedMapChest, null,
+        writeToJson(file, type, reset, cartographyTable, finishedMapChest, null,null,
             mapMaterialChests, dumpStation, mapCorner, materialDict, null);
     }
 
@@ -66,13 +66,14 @@ public final class ConfigSerializer {
         Pair<BlockPos, Vec3d> cartographyTable,
         Pair<BlockPos, Vec3d> finishedMapChest,
         Pair<BlockPos, Vec3d> usedToolChest,
+        Pair<BlockPos, Vec3d> bed,
         ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests,
         Pair<Vec3d, Pair<Float, Float>> dumpStation,
         BlockPos mapCorner,
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict,
         Set<ItemStack> toolSet
     ) throws IOException {
-        writeToJson(file, type, null, cartographyTable, finishedMapChest, usedToolChest,
+        writeToJson(file, type, null, cartographyTable, finishedMapChest, usedToolChest, bed,
             mapMaterialChests, dumpStation, mapCorner, materialDict, toolSet);
     }
 
@@ -83,6 +84,7 @@ public final class ConfigSerializer {
         Pair<BlockPos, Vec3d> cartographyTable,
         Pair<BlockPos, Vec3d> finishedMapChest,
         Pair<BlockPos, Vec3d> usedToolChest,
+        Pair<BlockPos, Vec3d> bed,
         ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests,
         Pair<Vec3d, Pair<Float, Float>> dumpStation,
         BlockPos mapCorner,
@@ -96,6 +98,7 @@ public final class ConfigSerializer {
         if (cartographyTable != null) root.add("cartographyTable", blockPosVecPairToJson(cartographyTable));
         if (finishedMapChest != null) root.add("finishedMapChest", blockPosVecPairToJson(finishedMapChest));
         if (usedToolChest != null) root.add("usedToolChest", blockPosVecPairToJson(usedToolChest));
+        if (bed != null) root.add("bed", blockPosVecPairToJson(bed));
 
         if (mapMaterialChests != null) {
             JsonArray materialChestsArray = new JsonArray();
