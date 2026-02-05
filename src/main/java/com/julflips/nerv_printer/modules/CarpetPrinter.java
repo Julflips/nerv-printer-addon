@@ -495,7 +495,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
     private void onSendPacket(PacketEvent.Send event) {
         if (state == State.SelectingDumpStation && event.packet instanceof PlayerActionC2SPacket packet
             && (packet.getAction() == PlayerActionC2SPacket.Action.DROP_ITEM || packet.getAction() == PlayerActionC2SPacket.Action.DROP_ALL_ITEMS)) {
-            dumpStation = new Pair<>(mc.player.getPos(), new Pair<>(mc.player.getYaw(), mc.player.getPitch()));
+            dumpStation = new Pair<>(mc.player.getEntityPos(), new Pair<>(mc.player.getYaw(), mc.player.getPitch()));
             state = State.SelectingFinishedMapChest;
             info("Dump Station selected. Select the §aFinished Map Chest");
             return;
@@ -514,7 +514,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             case SelectingReset:
                 BlockPos blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof TrappedChestBlock) {
-                    reset = new Pair<>(blockPos, mc.player.getPos());
+                    reset = new Pair<>(blockPos, mc.player.getEntityPos());
                     info("Reset Trapped Chest selected. Select the §aCartography Table.");
                     state = State.SelectingTable;
                 }
@@ -522,7 +522,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             case SelectingTable:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock().equals(Blocks.CARTOGRAPHY_TABLE)) {
-                    cartographyTable = new Pair<>(blockPos, mc.player.getPos());
+                    cartographyTable = new Pair<>(blockPos, mc.player.getEntityPos());
                     info("Cartography Table selected. Please throw an item into the §aDump Station.");
                     state = State.SelectingDumpStation;
                 }
@@ -530,7 +530,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             case SelectingFinishedMapChest:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof AbstractChestBlock) {
-                    finishedMapChest = new Pair<>(blockPos, mc.player.getPos());
+                    finishedMapChest = new Pair<>(blockPos, mc.player.getEntityPos());
                     info("Finished Map Chest selected. Select all §aMap- and Material-Chests. Interact with the Start Block to start printing.");
                     state = State.SelectingChests;
                 }
@@ -588,7 +588,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     foundItem = stack.getItem().asItem();
                     if (foundItem == Items.MAP || foundItem == Items.GLASS_PANE) {
                         info("Registered §aMapChest");
-                        mapMaterialChests = Utils.saveAdd(mapMaterialChests, tempChestPos, mc.player.getPos());
+                        mapMaterialChests = Utils.saveAdd(mapMaterialChests, tempChestPos, mc.player.getEntityPos());
                         state = State.SelectingChests;
                         return;
                     }
@@ -607,7 +607,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             info("Registered §a" + foundItem.getName().getString());
             if (!materialDict.containsKey(foundItem)) materialDict.put(foundItem, new ArrayList<>());
             ArrayList<Pair<BlockPos, Vec3d>> oldList = materialDict.get(foundItem);
-            ArrayList newChestList = Utils.saveAdd(oldList, tempChestPos, mc.player.getPos());
+            ArrayList newChestList = Utils.saveAdd(oldList, tempChestPos, mc.player.getEntityPos());
             materialDict.put(foundItem, newChestList);
             state = State.SelectingChests;
         }
@@ -868,7 +868,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         Utils.setForwardPressed(true);
         if (checkpoints.isEmpty()) {
             // Creating fallback checkpoint
-            checkpoints.add(new Pair(mc.player.getPos(), new Pair<>("lineEnd", null)));
+            checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair<>("lineEnd", null)));
         }
         Vec3d goal = checkpoints.get(0).getLeft();
         if (PlayerUtils.distanceTo(goal.add(0, mc.player.getY() - goal.y, 0)) < checkpointBuffer.get()) {
@@ -1162,7 +1162,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         }
         if (lastSwappedMaterial == material) return false;      //Wait for swapped material
         info("No " + material.getName().getString() + " found in inventory. Resetting...");
-        checkpoints.add(0, new Pair(mc.player.getPos(), new Pair("sprint", null)));
+        checkpoints.add(0, new Pair(mc.player.getEntityPos(), new Pair("sprint", null)));
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         return false;
     }
@@ -1226,7 +1226,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     info("Pos: " + knownErrors.get(i).toShortString());
                 }
                 knownErrors.clear();
-                checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
+                checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("lineEnd", null)));
                 state = State.Walking;
                 warning("ErrorAction is ToggleOff: Stopping because of an error...");
                 toggle();

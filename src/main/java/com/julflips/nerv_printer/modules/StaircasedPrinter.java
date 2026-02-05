@@ -538,7 +538,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void onSendPacket(PacketEvent.Send event) {
         if (state == State.SelectingDumpStation && event.packet instanceof PlayerActionC2SPacket packet
             && packet.getAction() == PlayerActionC2SPacket.Action.DROP_ITEM) {
-            dumpStation = new Pair<>(mc.player.getPos(), new Pair<>(mc.player.getYaw(), mc.player.getPitch()));
+            dumpStation = new Pair<>(mc.player.getEntityPos(), new Pair<>(mc.player.getYaw(), mc.player.getPitch()));
             state = State.SelectingFinishedMapChest;
             info("Dump Station selected. Select the §aFinished Map Chest");
             return;
@@ -557,7 +557,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             case SelectingTable:
                 BlockPos blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock().equals(Blocks.CARTOGRAPHY_TABLE)) {
-                    cartographyTable = new Pair<>(blockPos, mc.player.getPos());
+                    cartographyTable = new Pair<>(blockPos, mc.player.getEntityPos());
                     info("Cartography Table selected. Throw an item into the §aDump Station.");
                     state = State.SelectingDumpStation;
                 }
@@ -565,7 +565,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             case SelectingFinishedMapChest:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof AbstractChestBlock) {
-                    finishedMapChest = new Pair<>(blockPos, mc.player.getPos());
+                    finishedMapChest = new Pair<>(blockPos, mc.player.getEntityPos());
                     info("Finished Map Chest selected. Select the §aUsed Pickaxe Chest.");
                     state = State.SelectingUsedPickaxeChest;
                 }
@@ -573,7 +573,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             case SelectingUsedPickaxeChest:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof AbstractChestBlock) {
-                    usedToolChest = new Pair<>(blockPos, mc.player.getPos());
+                    usedToolChest = new Pair<>(blockPos, mc.player.getEntityPos());
                     if (sleep.get()) {
                         info("Used Pickaxe Chest selected. Select the §abed used for sleeping.");
                         state = State.SelectingBed;
@@ -586,7 +586,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             case SelectingBed:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof BedBlock) {
-                    bed = new Pair<>(blockPos, mc.player.getPos());
+                    bed = new Pair<>(blockPos, mc.player.getEntityPos());
                     info("Bed selected. Select all §aMaterial-, Tool-, and Map-Chests.");
                     state = State.SelectingChests;
                 }
@@ -649,7 +649,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     foundItemStack = stack;
                     if (foundItem == Items.MAP || foundItem == Items.GLASS_PANE) {
                         info("Registered §aMapChest");
-                        mapMaterialChests = Utils.saveAdd(mapMaterialChests, tempChestPos, mc.player.getPos());
+                        mapMaterialChests = Utils.saveAdd(mapMaterialChests, tempChestPos, mc.player.getEntityPos());
                         state = State.SelectingChests;
                         return;
                     }
@@ -671,7 +671,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             info("Registered item: §a" + foundItem.getName().getString());
             if (!materialDict.containsKey(foundItem)) materialDict.put(foundItem, new ArrayList<>());
             ArrayList<Pair<BlockPos, Vec3d>> oldList = materialDict.get(foundItem);
-            ArrayList newChestList = Utils.saveAdd(oldList, tempChestPos, mc.player.getPos());
+            ArrayList newChestList = Utils.saveAdd(oldList, tempChestPos, mc.player.getEntityPos());
             materialDict.put(foundItem, newChestList);
             state = State.SelectingChests;
             return;
@@ -835,7 +835,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             knownErrors.clear();
             knownErrors.addAll(getInvalidPlacements());
             if (knownErrors.isEmpty()) {
-                checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
+                checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("lineEnd", null)));
                 state = State.Walking;
             } else {
                 return;
@@ -1033,7 +1033,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
         if (checkpoints.isEmpty()) {
             // Creating fallback checkpoint
-            checkpoints.add(new Pair(mc.player.getPos(), new Pair<>("lineEnd", null)));
+            checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair<>("lineEnd", null)));
         }
         Vec3d goal = checkpoints.get(0).getLeft();
         if (PlayerUtils.distanceTo(goal.add(0, mc.player.getY() - goal.y, 0)) < checkpointBuffer.get()) {
@@ -1097,7 +1097,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     break;
                 case "miningLineEnd":
                     Utils.setBackwardPressed(false);
-                    checkpoints.add(new Pair(mc.player.getPos(), new Pair<>("miningLineEnd", null)));
+                    checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair<>("miningLineEnd", null)));
                     break;
                 case "usedToolChest":
                     state = State.AwaitUsedToolChestResponse;
@@ -1373,7 +1373,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         info("No " + material.getName().getString() + " found in inventory. Resetting...");
         mc.player.setVelocity(0, 0, 0);
         Vec3d pathCheckpoint = new Vec3d(mc.player.getX(), mapCorner.toCenterPos().getY(), mapCorner.north().toCenterPos().getZ());
-        checkpoints.add(0, new Pair(mc.player.getPos(), new Pair("walkRestock", null)));
+        checkpoints.add(0, new Pair(mc.player.getEntityPos(), new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(pathCheckpoint, new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         checkpoints.add(0, new Pair(pathCheckpoint, new Pair("walkRestock", null)));;

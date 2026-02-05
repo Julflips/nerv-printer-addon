@@ -577,7 +577,7 @@ public class FullBlockPrinter extends Module {
         }
         if (state == State.SelectingDumpStation && event.packet instanceof PlayerActionC2SPacket packet
             && packet.getAction() == PlayerActionC2SPacket.Action.DROP_ITEM) {
-            dumpStation = new Pair<>(mc.player.getPos(), new Pair<>(mc.player.getYaw(), mc.player.getPitch()));
+            dumpStation = new Pair<>(mc.player.getEntityPos(), new Pair<>(mc.player.getYaw(), mc.player.getPitch()));
             state = State.SelectingFinishedMapChest;
             info("Dump Station selected. Select the §aFinished Map Chest");
             return;
@@ -596,7 +596,7 @@ public class FullBlockPrinter extends Module {
             case SelectingNorthReset:
                 BlockPos blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof TrappedChestBlock) {
-                    northReset = new Pair<>(packet.getBlockHitResult(), mc.player.getPos());
+                    northReset = new Pair<>(packet.getBlockHitResult(), mc.player.getEntityPos());
                     info("North Reset Trapped Chest selected. Select the §aSouth Reset Trapped Chest.");
                     state = State.SelectingSouthReset;
                 }
@@ -604,7 +604,7 @@ public class FullBlockPrinter extends Module {
             case SelectingSouthReset:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof TrappedChestBlock) {
-                    southReset = new Pair<>(packet.getBlockHitResult(), mc.player.getPos());
+                    southReset = new Pair<>(packet.getBlockHitResult(), mc.player.getEntityPos());
                     info("South Reset Trapped Chest selected. Select the §aCartography Table.");
                     state = State.SelectingTable;
                 }
@@ -612,7 +612,7 @@ public class FullBlockPrinter extends Module {
             case SelectingTable:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock().equals(Blocks.CARTOGRAPHY_TABLE)) {
-                    cartographyTable = new Pair<>(packet.getBlockHitResult(), mc.player.getPos());
+                    cartographyTable = new Pair<>(packet.getBlockHitResult(), mc.player.getEntityPos());
                     info("Cartography Table selected. Throw an item into the §aDump Station.");
                     state = State.SelectingDumpStation;
                 }
@@ -620,7 +620,7 @@ public class FullBlockPrinter extends Module {
             case SelectingFinishedMapChest:
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof AbstractChestBlock) {
-                    finishedMapChest = new Pair<>(packet.getBlockHitResult(), mc.player.getPos());
+                    finishedMapChest = new Pair<>(packet.getBlockHitResult(), mc.player.getEntityPos());
                     info("Finished Map Chest selected. Select all §aMaterial- and Map-Chests.");
                     state = State.SelectingChests;
                 }
@@ -701,7 +701,7 @@ public class FullBlockPrinter extends Module {
                     foundItem = stack.getItem().asItem();
                     if (foundItem == Items.MAP || foundItem == Items.GLASS_PANE) {
                         info("Registered §aMapChest");
-                        mapMaterialChests = Utils.saveAdd(mapMaterialChests, tempChestPos, mc.player.getPos());
+                        mapMaterialChests = Utils.saveAdd(mapMaterialChests, tempChestPos, mc.player.getEntityPos());
                         state = State.SelectingChests;
                         return;
                     }
@@ -720,7 +720,7 @@ public class FullBlockPrinter extends Module {
             info("Registered §a" + foundItem.getName().getString());
             if (!materialDict.containsKey(foundItem)) materialDict.put(foundItem, new ArrayList<>());
             ArrayList<Pair<BlockPos, Vec3d>> oldList = materialDict.get(foundItem);
-            ArrayList newChestList = Utils.saveAdd(oldList, tempChestPos, mc.player.getPos());
+            ArrayList newChestList = Utils.saveAdd(oldList, tempChestPos, mc.player.getEntityPos());
             materialDict.put(foundItem, newChestList);
             state = State.SelectingChests;
         }
@@ -1085,7 +1085,7 @@ public class FullBlockPrinter extends Module {
             }
             if (checkpoints.size() == 0) {
                 if (!arePlacementsCorrect() && errorAction.get() == ErrorAction.ToggleOff) {
-                    checkpoints.add(new Pair(mc.player.getPos(), new Pair("lineEnd", null)));
+                    checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("lineEnd", null)));
                     warning("ErrorAction is ToggleOff: Stopping because of error...");
                     toggle();
                     return;
@@ -1186,9 +1186,9 @@ public class FullBlockPrinter extends Module {
         }
         if (lastSwappedMaterial == material) return false;      //Wait for swapped material
         info("No " + material.getName().getString() + " found in inventory. Resetting...");
-        Vec3d pathCheckpoint1 = mc.player.getPos().offset(Direction.WEST, linesPerRun.get());
+        Vec3d pathCheckpoint1 = mc.player.getEntityPos().offset(Direction.WEST, linesPerRun.get());
         Vec3d pathCheckpoint2 = new Vec3d(pathCheckpoint1.getX(), pathCheckpoint1.y, mapCorner.north().toCenterPos().getZ());
-        checkpoints.add(0, new Pair(mc.player.getPos(), new Pair("walkRestock", null)));
+        checkpoints.add(0, new Pair(mc.player.getEntityPos(), new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(pathCheckpoint1, new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(pathCheckpoint2, new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
