@@ -6,8 +6,16 @@ Nerv Printer is an addon for the meteor client allowing you to build flat mapart
 ## Carpet Printer
 The Carpet Printer prints the map line-by-line and does not reuse carpet items, making it only suited for servers where carpet duping is enabled. You can find the full documentation [here](Documentation/CarpetGuide.md).
 
-## Fullblock Printer
+## Staircased Printer
+The Staircased Printer builds arbitrary staircased fullblock maps line by line.
+The bot mines all placed blocks again to recycle all used materials and feeds them into an item sorter.
+This module **will not work on servers where placing blocks in the air is disabled**.
+You can find the full documentation [here](Documentation/StaircasedGuide.md).
+
+## Fullblock Flat Printer (not supported)
 The Fullblock Printer utilizes a TNT-bomber and a large item sorter to reuse most materials used to build the map. However, it is only compatible with servers where TNT duplication is enabled. You can find the full documentation [here](Documentation/FullblockGuide.md).
+
+This module is not updated anymore. We recommend using the staircased printer even for flat maps instead.
 
 ## Map Namer
 Semi-automatically names unnamed map items in inventory. Pauses on anvil break and insufficient xp and can be resumed.

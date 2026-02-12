@@ -70,6 +70,6 @@ One bot acts as the **master** and instructs the other **slaves** via direct mes
 
 **Setup:**
 1. Adjust the prefix and suffix in the settings. To circumvent DM signatures most servers use third-party DM plugins. As the syntax of them vary you will need to adjust pre- & suffix in the Multi-User-settings. Receiving DMs should look like this: (prefix)(sender's name)(suffix)(message)
-2. Load the configuration and enable the module on **every** bot.
+2. Enable the module and load the configuration on **every** bot.
 3. Move all slave bots into render distance of the master bot, then press the **Register** button using the master account. An **Accept** message should appear for each slave.
 4. Start the print in the usual way.
