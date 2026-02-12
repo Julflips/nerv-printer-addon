@@ -210,11 +210,20 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     );
 
     private final Setting<Integer> jumpCoolDown = sgAdvanced.add(new IntSetting.Builder()
-        .name("jump-cooldown")
+        .name("jump-timeout")
         .description("How many ticks to wait after jumping before jumping again.")
         .defaultValue(5)
         .min(1)
         .sliderRange(1, 20)
+        .build()
+    );
+
+    private final Setting<Integer> mineLineEndTimeout = sgAdvanced.add(new IntSetting.Builder()
+        .name("mine-line-end-timeout")
+        .description("How many ticks to wait after mining a line to collect items that fell on the platform.")
+        .defaultValue(20)
+        .min(0)
+        .sliderRange(0, 30)
         .build()
     );
 
@@ -809,6 +818,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void onTick(TickEvent.Pre event) {
         if (state == null) return;
 
+        long timeDifference = System.currentTimeMillis() - lastTickTime;
+        int allowedPlacements = (int) Math.floor(timeDifference / (long) placeDelay.get());
+        lastTickTime += allowedPlacements * placeDelay.get();
+
         if (!state.equals(debugPreviousState)) {
             debugPreviousState = state;
             if (debugPrints.get()) info("State changed to: §a" + state);
@@ -864,10 +877,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 return;
             }
         }
-
-        long timeDifference = System.currentTimeMillis() - lastTickTime;
-        int allowedPlacements = (int) Math.floor(timeDifference / (long) placeDelay.get());
-        lastTickTime += allowedPlacements * placeDelay.get();
 
         if (interactTimeout > 0) {
             interactTimeout--;
@@ -945,6 +954,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             int relativeX = Math.abs(mc.player.getBlockX() - mapCorner.getX());
             if  (isLineMined(relativeX)) {
                 miningPos = null;
+                timeoutTicks = mineLineEndTimeout.get();
                 if (SlaveSystem.isSlave()) {
                     Utils.setBackwardPressed(false);
                     state = State.AwaitSlaveMineLine;
@@ -953,7 +963,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 } else {
                     if (minedLines < map.length) {
                         state = State.Walking;
-                        Utils.setForwardPressed(true);
+                        if (timeoutTicks == 0) Utils.setForwardPressed(true);
                         Utils.setBackwardPressed(false);
                         calculateMiningPath();
                     } else {
@@ -1098,7 +1108,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 case "miningLineEnd":
                     Utils.setBackwardPressed(false);
                     checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair<>("miningLineEnd", null)));
-                    break;
+                    return;
                 case "usedToolChest":
                     state = State.AwaitUsedToolChestResponse;
                     interactWithBlock(usedToolChest.getLeft());
@@ -1376,7 +1386,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         checkpoints.add(0, new Pair(mc.player.getEntityPos(), new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(pathCheckpoint, new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
-        checkpoints.add(0, new Pair(pathCheckpoint, new Pair("walkRestock", null)));;
+        checkpoints.add(0, new Pair(pathCheckpoint, new Pair("walkRestock", null)));
     }
 
     private BlockPos getNextBlockPos(boolean mining) {
@@ -1436,7 +1446,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void calculateMiningPath() {
         // Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
-        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -2);
+        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -0.7);
         Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][0].getRight()+0.5, -1);
         for (int i = 0; i < map[minedLines].length-1; i++) {
             cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][i].getRight()+0.5, i);
