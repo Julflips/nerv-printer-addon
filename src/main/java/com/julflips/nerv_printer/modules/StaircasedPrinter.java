@@ -1108,7 +1108,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 case "miningLineEnd":
                     Utils.setBackwardPressed(false);
                     checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair<>("miningLineEnd", null)));
-                    return;
+                    break;
                 case "usedToolChest":
                     state = State.AwaitUsedToolChestResponse;
                     interactWithBlock(usedToolChest.getLeft());
