@@ -883,9 +883,11 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     for (BlockPos errorPos : newErrors) {
                         BlockPos relativePos = errorPos.subtract(mapCorner);
                         if (logErrors.get()) {
+                            Block missingBlock = map[relativePos.getX()][relativePos.getZ()];
+                            String missingBlockString = missingBlock == null ? "empty" : missingBlock.getName().getString();
                             info("Error at: " + errorPos.toShortString() + ". Is: "
                                 + MapAreaCache.getCachedBlockState(errorPos).getBlock().getName().getString()
-                                + ". Should be: " + map[relativePos.getX()][relativePos.getZ()].getName().getString());
+                                + ". Should be: " + missingBlockString);
                         }
                         if (SlaveSystem.isSlave()) {
                             // Obfuscate error pas as relative pos
