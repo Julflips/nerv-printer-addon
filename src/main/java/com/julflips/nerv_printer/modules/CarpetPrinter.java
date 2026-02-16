@@ -104,8 +104,8 @@ public class CarpetPrinter extends Module implements MapPrinter {
         .build()
     );
 
-    private final Setting<List<Block>> startBlock = sgGeneral.add(new BlockListSetting.Builder()
-        .name("start-Block")
+    private final Setting<List<Block>> startBlocks = sgGeneral.add(new BlockListSetting.Builder()
+        .name("start-blocks")
         .description("Which block to interact with to start the printing process.")
         .defaultValue(Blocks.STONE_BUTTON, Blocks.ACACIA_BUTTON, Blocks.BAMBOO_BUTTON, Blocks.BIRCH_BUTTON,
             Blocks.CRIMSON_BUTTON, Blocks.DARK_OAK_BUTTON, Blocks.JUNGLE_BUTTON, Blocks.OAK_BUTTON,
@@ -139,6 +139,13 @@ public class CarpetPrinter extends Module implements MapPrinter {
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
         .description("Rotate when placing a block.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> northToSouth = sgGeneral.add(new BoolSetting.Builder()
+        .name("north-to-south")
+        .description("Start printing on the north side and go south. Flipped if disabled.")
         .defaultValue(true)
         .build()
     );
@@ -536,7 +543,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                 }
                 break;
             case SelectingChests:
-                if (startBlock.get().isEmpty())
+                if (startBlocks.get().isEmpty())
                     warning("No block selected as Start Block! Please select one in the settings.");
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 BlockState blockState = MapAreaCache.getCachedBlockState(blockPos);
@@ -544,7 +551,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     tempChestPos = blockPos;
                     state = State.AwaitRegisterResponse;
                 }
-                if (startBlock.get().contains(blockState.getBlock())) {
+                if (startBlocks.get().contains(blockState.getBlock())) {
                     //Check if requirements to start building are met
                     if (materialDict.isEmpty()) {
                         warning("No Material Chests selected!");
@@ -813,7 +820,6 @@ public class CarpetPrinter extends Module implements MapPrinter {
             if (MapAreaCache.getCachedBlockState(miningPos).isAir()) {
                 miningPos = null;
                 state = State.Walking;
-                if (checkpoints.isEmpty()) calculateBuildingPath(false, true);
             } else {
                 Rotations.rotate(Rotations.getYaw(miningPos), Rotations.getPitch(miningPos), 50);
                 BlockUtils.breakBlock(miningPos, true);
@@ -1214,7 +1220,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         if (!SlaveSystem.isSlave()) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         MapAreaCache.reset(mapCorner);
-        calculateBuildingPath(true, true);
+        calculateBuildingPath(northToSouth.get(), true);
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         state = State.Walking;
     }

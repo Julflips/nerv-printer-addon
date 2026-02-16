@@ -88,8 +88,8 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         .build()
     );
 
-    private final Setting<List<Block>> startBlock = sgGeneral.add(new BlockListSetting.Builder()
-        .name("start-Block")
+    private final Setting<List<Block>> startBlocks = sgGeneral.add(new BlockListSetting.Builder()
+        .name("start-blocks")
         .description("Which block to interact with to start the printing process.")
         .defaultValue(Blocks.STONE_BUTTON, Blocks.ACACIA_BUTTON, Blocks.BAMBOO_BUTTON, Blocks.BIRCH_BUTTON,
             Blocks.CRIMSON_BUTTON, Blocks.DARK_OAK_BUTTON, Blocks.JUNGLE_BUTTON, Blocks.OAK_BUTTON,
@@ -601,7 +601,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 }
                 break;
             case SelectingChests:
-                if (startBlock.get().isEmpty())
+                if (startBlocks.get().isEmpty())
                     warning("No block selected as Start Block! Please select one in the settings.");
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 BlockState blockState = MapAreaCache.getCachedBlockState(blockPos);
@@ -609,7 +609,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     tempChestPos = blockPos;
                     state = State.AwaitRegisterResponse;
                 }
-                if (startBlock.get().contains(blockState.getBlock())) {
+                if (startBlocks.get().contains(blockState.getBlock())) {
                     //Check if requirements to start building are met
                     if (materialDict.isEmpty()) {
                         warning("No Material Chests selected!");
