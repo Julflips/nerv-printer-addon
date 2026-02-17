@@ -144,6 +144,23 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         .build()
     );
 
+    private final Setting<Boolean> useDefaultConfigFile = sgGeneral.add(new BoolSetting.Builder()
+        .name("use-default-config-file")
+        .description("Load a config file when the module is enabled.")
+        .defaultValue(false)
+        .build()
+    );
+
+    public final Setting<String> configFileName = sgGeneral.add(new StringSetting.Builder()
+        .name("config-file-name")
+        .description("The config file that is loaded  when the module is enabled.")
+        .defaultValue("carpet-printer-config.json")
+        .wide()
+        .renderer(StarscriptTextBoxRenderer.class)
+        .visible(() -> useDefaultConfigFile.get())
+        .build()
+    );
+
     //Advanced
 
     private final Setting<Integer> preRestockDelay = sgAdvanced.add(new IntSetting.Builder()
@@ -526,14 +543,16 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
 
         if (!prepareNextMapFile()) return;
-        info("Building: §a" + mapFile.getName());
-        info("Requirements: ");
-        for (Pair<Block, Integer> p : blockPaletteDict.values()) {
-            if (p.getRight() == 0) continue;
-            info(p.getLeft().getName().getString() + ": " + p.getRight());
-        }
+
         state = State.SelectingMapArea;
-        info("Select the §aMap Building Area (128x128). (Right-click the edge from the inside)");
+        if (useDefaultConfigFile.get()) {
+            File configFolder = new File(mapFolder, "_configs");
+            if (!loadConfig(new File(configFolder, configFileName.get()))) {
+                info("Select the §aMap Building Area (128x128). (Right-click the edge from the inside)");
+            }
+        } else {
+            info("Select the §aMap Building Area (128x128). (Right-click the edge from the inside)");
+        }
     }
 
     @Override
@@ -1638,7 +1657,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     // MapPrinter Interface for Slave Logic
 
     public void setInterval(Pair<Integer, Integer> interval) {
-        info("Set interval to: " + interval.getLeft() + " - " + interval.getRight());
         workingInterval = interval;
         trueInterval = interval;
     }
@@ -1756,8 +1774,11 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
     }
 
-    private void loadConfig(File configFile) {
-        if (configFile == null || !configFile.exists() || state == null) return;
+    private boolean loadConfig(File configFile) {
+        if (configFile == null || !configFile.exists() || state == null) {
+            warning("Could not find config file.");
+            return false;
+        }
         List<State> allowedStates = List.of(
             State.SelectingChests,
             State.SelectingBed,
@@ -1770,7 +1791,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         );
         if (!allowedStates.contains(state)) {
             error("Can only load config during the registration phase.");
-            return;
+            return false;
         }
 
         try {
@@ -1779,12 +1800,12 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
             if (!data.type.equals("staircased")) {
                 error("Config file is of type "+ data.type +" and not 'staircased'.");
-                return;
+                return false;
             }
             if (data.cartographyTable == null || data.finishedMapChest == null || data.dumpStation == null || data.mapCorner == null
                 || data.materialDict.isEmpty() || data.usedToolChest == null || toolSet == null) {
                 error("Config file is missing required data.");
-                return;
+                return false;
             }
             this.cartographyTable = data.cartographyTable;
             this.finishedMapChest = data.finishedMapChest;
@@ -1808,6 +1829,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         } catch (IOException e) {
             error("Failed to read config file.");
         }
+        return true;
     }
 
     // NBT file handling
