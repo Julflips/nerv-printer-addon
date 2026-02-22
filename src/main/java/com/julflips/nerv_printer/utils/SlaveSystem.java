@@ -42,8 +42,8 @@ public final class SlaveSystem {
         printerModule = module;
         commandDelay = delay;
         directMessageCommand = dmCommand;
-        senderPrefix = prefix;
-        senderSuffix = suffix;
+        senderPrefix = prefix.toLowerCase();
+        senderSuffix = suffix.toLowerCase();
         randomLength = randomSuffixLength;
         slaves.clear();
         toBeSentMessages.clear();
@@ -172,6 +172,7 @@ public final class SlaveSystem {
     }
 
     private static void handleMessage(String rawMessage, @Nullable String sender) {
+        rawMessage = rawMessage.toLowerCase();
         String content;
         // Extract sender from message if not provided in packet
         if (sender != null) {
