@@ -253,6 +253,15 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         .build()
     );
 
+    private final Setting<Double> mineLineEndOffset = sgAdvanced.add(new DoubleSetting.Builder()
+        .name("mine-LineEndOffset")
+        .description("The offset to the Map Area when mining the last block of a row.")
+        .defaultValue(1)
+        .min(0.4)
+        .sliderRange(0.5, 3)
+        .build()
+    );
+
     private final Setting<Double> checkpointBuffer = sgAdvanced.add(new DoubleSetting.Builder()
         .name("checkpoint-buffer")
         .description("The buffer area of the checkpoints. Larger means less precise walking, but might be desired at higher speeds.")
@@ -1465,7 +1474,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void calculateMiningPath() {
         // Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
-        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -1);
+        Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -mineLineEndOffset.get());
         Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][0].getRight()+0.5, -1);
         for (int i = 0; i < map[minedLines].length-1; i++) {
             cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][i].getRight()+0.5, i);
