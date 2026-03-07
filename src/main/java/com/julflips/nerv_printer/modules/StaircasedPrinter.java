@@ -1567,6 +1567,13 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         calculateMiningPath();
         refillMiningInventory();
         state = State.Walking;
+        if (sleep.get()) {
+            if (bed == null) {
+                warning("Can not sleep because bed was not set.");
+            } else {
+                checkpoints.add(0, new Pair(bed.getRight(), new Pair("sleep", null)));
+            }
+        }
         for (String slave : SlaveSystem.slaves) {
             if (minedLines >= map.length) break;
             SlaveSystem.queueDM(slave, "mine:" + minedLines);
