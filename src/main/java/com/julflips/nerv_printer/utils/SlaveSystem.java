@@ -262,7 +262,7 @@ public final class SlaveSystem {
 
     @EventHandler
     private static void onTick(TickEvent.Pre event) {
-        if (mc.getNetworkHandler().equals(null)) return;
+        if (mc.getNetworkHandler() == null) return;
         if (timeout > 0) timeout--;
         if (!toBeSentMessages.isEmpty()) {
             if (timeout <= 0) {
