@@ -1063,8 +1063,8 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             Direction direction = Direction.fromHorizontalDegrees(mc.player.getYaw());
             if (mc.options.backKey.isPressed()) direction = direction.getOpposite();
             BlockPos target = mc.player.getBlockPos().offset(direction);
-            if (mc.player.isOnGround() && !mc.world.getBlockState(target).isAir()
-                && mc.world.getBlockState(target.up(1)).isAir() && mc.world.getBlockState(target.up(2)).isAir()) {
+            if (mc.player.isOnGround() && !MapAreaCache.getCachedBlockState(target).isAir()
+                && MapAreaCache.getCachedBlockState(target.up(1)).isAir() && MapAreaCache.getCachedBlockState(target.up(2)).isAir()) {
                 jumpTimeout = jumpCoolDown.get();
                 Utils.setJumpPressed(true);
             }
@@ -1197,7 +1197,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             if (centerPos.getZ() - mc.player.getZ() > 0.5) {
                 miningPos = nextBlockPos;
                 mc.player.setPitch((float) Rotations.getPitch(miningPos));
-                BlockState blockState = mc.world.getBlockState(miningPos);
+                BlockState blockState = MapAreaCache.getCachedBlockState(miningPos);
                 ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockState);
                 for (int slot : availableHotBarSlots) {
                     if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
@@ -1436,13 +1436,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         return null;
     }
 
-    /*private boolean canSee(Vec3d pos) {
-        RaycastContext raycastContext = new RaycastContext(mc.player.getEyePos(), pos, RaycastContext.ShapeType.OUTLINE,
-            RaycastContext.FluidHandling.NONE, mc.player);
-        HitResult hitResult = mc.world.raycast(raycastContext);
-        return hitResult.getPos().equals(pos);
-    }*/
-
     // Path and Building Management
 
     private void calculateBuildingPath(boolean sprintFirst) {
@@ -1480,7 +1473,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][i].getRight()+0.5, i);
             if (i+2 >= map[minedLines].length) break;
             BlockPos airPos = mapCorner.add(minedLines, map[minedLines][i+2].getRight(), i+2);
-            if (mc.world.getBlockState(airPos).isAir()) break;
+            if (MapAreaCache.getCachedBlockState(airPos).isAir()) break;
         }
         checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
         checkpoints.add(new Pair(cp2, new Pair("startMine", null)));
