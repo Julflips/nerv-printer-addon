@@ -36,7 +36,9 @@ Semi-automatically names unnamed map items in inventory. Pauses on anvil break a
 A collection of maps printed with this addon:
 
 <div style="overflow-x: auto; white-space: nowrap;">
-    
+
+  <img src="Documentation/Gallery/TheObservatory.png" alt="The Observatory" height="200">
+  <img src="Documentation/Gallery/02.png" alt="02" height="200">
   <img src="Documentation/Gallery/TarotCards.png" alt="Tarot Cards" height="200">
   <img src="Documentation/Gallery/IdiotSandwich.png" alt="Idiot Sandwich" height="200">
   <img src="Documentation/Gallery/WelcomeToHell.png" alt="Welcome To Hell" height="200">
