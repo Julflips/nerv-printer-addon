@@ -922,10 +922,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                                 + MapAreaCache.getCachedBlockState(errorPos).getBlock().getName().getString()
                                 + ". Should be: " + missingBlockString);
                         }
-                        if (SlaveSystem.isSlave()) {
-                            // Obfuscate error pas as relative pos
-                            SlaveSystem.queueMasterDM("error:" + relativePos.getX() + ":" + relativePos.getZ());
-                        }
+                        // Slaves no longer send errors to master; they will fix it themselves
                     }
                     knownErrors.addAll(newErrors);
                     if (!knownErrors.isEmpty() && errorAction.get() == ErrorAction.Reset) {
@@ -995,6 +992,35 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     return;
             }
             if (checkpoints.isEmpty()) {
+                if (!knownErrors.isEmpty()) {
+                    if (errorAction.get() == ErrorAction.ToggleOff) {
+                        info("Found errors: ");
+                        for (int i = knownErrors.size() - 1; i >= 0; i--) {
+                            info("Pos: " + knownErrors.get(i).toShortString());
+                        }
+                        knownErrors.clear();
+                        checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("lineEnd", null)));
+                        state = State.Walking;
+                        warning("ErrorAction is ToggleOff: Stopping because of an error...");
+                        toggle();
+                        return;
+                    } else if (errorAction.get() == ErrorAction.Repair) {
+                        info("Fixing errors: ");
+                        for (int i = knownErrors.size() - 1; i >= 0; i--) {
+                            BlockPos errorPos = knownErrors.get(i);
+                            info("Pos: " + errorPos.toShortString());
+                            checkpoints.add(new Pair(errorPos.toCenterPos(), new Pair("break", errorPos)));
+                        }
+                        checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+                        for (int i = 0; i < knownErrors.size(); i++) {
+                            String action = (i == knownErrors.size() - 1) ? "lineEnd" : "sprint";
+                            BlockPos errorPos = knownErrors.get(i);
+                            checkpoints.add(new Pair(errorPos.toCenterPos(), new Pair(action, null)));
+                        }
+                        knownErrors.clear();
+                        return;
+                    }
+                }
                 if (SlaveSystem.isSlave()) {
                     SlaveSystem.queueMasterDM("finished");
                     state = State.AwaitSlaveNextMap;
@@ -1253,39 +1279,6 @@ public class CarpetPrinter extends Module implements MapPrinter {
     }
 
     private boolean endBuilding() {
-        if (!knownErrors.isEmpty()) {
-            if (errorAction.get() == ErrorAction.ToggleOff) {
-                workingInterval = new Pair<>(0, map.length - 1);
-                info("Found errors: ");
-                for (int i = knownErrors.size() - 1; i >= 0; i--) {
-                    info("Pos: " + knownErrors.get(i).toShortString());
-                }
-                knownErrors.clear();
-                checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("lineEnd", null)));
-                state = State.Walking;
-                warning("ErrorAction is ToggleOff: Stopping because of an error...");
-                toggle();
-                return false;
-            }
-            if (errorAction.get() == ErrorAction.Repair) {
-                workingInterval = new Pair<>(0, map.length - 1);
-                info("Fixing errors: ");
-                for (int i = knownErrors.size() - 1; i >= 0; i--) {
-                    BlockPos errorPos = knownErrors.get(i);
-                    info("Pos: " + errorPos.toShortString());
-                    checkpoints.add(new Pair(errorPos.toCenterPos(), new Pair("break", errorPos)));
-                }
-                checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
-                for (int i = 0; i < knownErrors.size(); i++) {
-                    String action = (i == knownErrors.size() - 1) ? "lineEnd" : "sprint";
-                    BlockPos errorPos = knownErrors.get(i);
-                    checkpoints.add(new Pair(errorPos.toCenterPos(), new Pair(action, null)));
-                }
-                knownErrors.clear();
-                state = State.Walking;
-                return true;
-            }
-        }
         info("Finished building map");
         state = State.Walking;
         workingInterval = trueInterval;
