@@ -35,7 +35,7 @@ public class BlockUtilsMixin {
 
     //Fixing meteors garbo code
     @Inject(method = "getPlaceSide", at = @At("HEAD"), cancellable = true)
-    private static void injectedGetPlaceSide(BlockPos blockPos, CallbackInfoReturnable<Direction> cir ) {
+    private static void injectedGetPlaceSide(BlockPos blockPos, CallbackInfoReturnable<Direction> cir) {
         ArrayList<Direction> placeableDirections = new ArrayList<>();
         for (Direction side : Direction.values()) {
             BlockPos neighbor = blockPos.offset(side);
@@ -53,12 +53,12 @@ public class BlockUtilsMixin {
         Vec3d lookVec = blockPos.toCenterPos().subtract(mc.player.getEyePos());
         //List of direction and their significance (a larger score means the player is looking more in that direction)
         List<Pair<Direction, Double>> directionSignificance = Arrays.asList(
-                new Pair<>(Direction.WEST, -lookVec.getX()),
-                new Pair<>(Direction.EAST, lookVec.getX()),
-                new Pair<>(Direction.DOWN, -lookVec.getY()),
-                new Pair<>(Direction.UP, lookVec.getY()),
-                new Pair<>(Direction.NORTH, -lookVec.getZ()),
-                new Pair<>(Direction.SOUTH, lookVec.getZ())
+            new Pair<>(Direction.WEST, -lookVec.getX()),
+            new Pair<>(Direction.EAST, lookVec.getX()),
+            new Pair<>(Direction.DOWN, -lookVec.getY()),
+            new Pair<>(Direction.UP, lookVec.getY()),
+            new Pair<>(Direction.NORTH, -lookVec.getZ()),
+            new Pair<>(Direction.SOUTH, lookVec.getZ())
         );
 
         // Sort the list descending based on the significance of the direction

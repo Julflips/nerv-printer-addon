@@ -54,7 +54,7 @@ import java.util.stream.IntStream;
 
 public class StaircasedPrinter extends Module implements MapPrinter {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
-    private final SettingGroup sgAdvanced = settings.createGroup("Advanced",  false);
+    private final SettingGroup sgAdvanced = settings.createGroup("Advanced", false);
     private final SettingGroup sgMultiUser = settings.createGroup("Multi User", false);
     private final SettingGroup sgError = settings.createGroup("Error Handling");
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -776,9 +776,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 Utils.getOneItem(paneSlot, true, availableSlots, availableHotBarSlots, packet);
                 mc.player.getInventory().setSelectedSlot(availableHotBarSlots.get(0));
 
-                BlockPos centerBlockPos = mapCorner.add(map.length/2 - 1, map[map.length/2 - 1][map[0].length/2 - 1].getRight(), map[0].length/2 - 1);
+                BlockPos centerBlockPos = mapCorner.add(map.length / 2 - 1, map[map.length / 2 - 1][map[0].length / 2 - 1].getRight(), map[0].length / 2 - 1);
                 Vec3d center = centerBlockPos.toCenterPos().add(0, 0.5, 0);
-                Vec3d centerEdge = mapCorner.add(map.length/2 - 1, 0, -1).toCenterPos().add(0, 0.5, 0);
+                Vec3d centerEdge = mapCorner.add(map.length / 2 - 1, 0, -1).toCenterPos().add(0, 0.5, 0);
                 checkpoints.add(new Pair(centerEdge, new Pair("walkRestock", null)));
                 checkpoints.add(new Pair(center, new Pair("fillMap", null)));
                 checkpoints.add(new Pair(centerEdge, new Pair("walkRestock", null)));
@@ -980,7 +980,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         if (state.equals(State.Mining)) {
             // Check if entire line has been mined
             int relativeX = Math.abs(mc.player.getBlockX() - mapCorner.getX());
-            if  (isLineMined(relativeX)) {
+            if (isLineMined(relativeX)) {
                 miningPos = null;
                 timeoutTicks = mineLineEndTimeout.get();
                 if (SlaveSystem.isSlave()) {
@@ -1076,7 +1076,8 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         Vec3d goal = checkpoints.get(0).getLeft();
         if (PlayerUtils.distanceTo(goal.add(0, mc.player.getY() - goal.y, 0)) < checkpointBuffer.get()) {
             Pair<String, BlockPos> checkpointAction = checkpoints.get(0).getRight();
-            if (debugPrints.get() && checkpointAction.getLeft() != null) info("Reached: §a" + checkpointAction.getLeft());
+            if (debugPrints.get() && checkpointAction.getLeft() != null)
+                info("Reached: §a" + checkpointAction.getLeft());
             if (snapToCheckpoints.get()) mc.player.setPosition(goal.x, mc.player.getY(), goal.z);
             checkpoints.remove(0);
             switch (checkpointAction.getLeft()) {
@@ -1297,8 +1298,8 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             }
             int rawUses = toolUseDict.get(itemStack);
             float slaveModifier = (float) (trueInterval.getRight() - trueInterval.getLeft() + 1) / (float) map.length;
-            double adjustedUses = (float) rawUses / (float) (unbreakingLevel+1) * durabilityBuffer.get() * slaveModifier;
-            int itemsNeeded = (int) Math.ceil( adjustedUses / (float) itemStack.getMaxDamage());
+            double adjustedUses = (float) rawUses / (float) (unbreakingLevel + 1) * durabilityBuffer.get() * slaveModifier;
+            int itemsNeeded = (int) Math.ceil(adjustedUses / (float) itemStack.getMaxDamage());
             info("Restocking §a" + itemsNeeded + " " + itemStack.getItem().getName().getString() + " (" + rawUses + " uses)");
             restockList.add(0, Triple.of(itemStack.getItem().asItem(), itemsNeeded, itemsNeeded));
         }
@@ -1418,7 +1419,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private BlockPos getNextBlockPos(boolean mining) {
-         // For building: Get next block in working interval
+        // For building: Get next block in working interval
         // For mining: Get next block on current mining line
         int relativeX = mc.player.getBlockX() - mapCorner.getX();
         int lowerX = mining ? relativeX : workingInterval.getLeft();
@@ -1452,7 +1453,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             }
             if (lineFinished) continue;
             Vec3d cp1 = mapCorner.toCenterPos().add(x, 0.5, -1);
-            Vec3d cp2 = mapCorner.toCenterPos().add(x, map[x][map[0].length-2].getRight() + 0.5, map[0].length-2);
+            Vec3d cp2 = mapCorner.toCenterPos().add(x, map[x][map[0].length - 2].getRight() + 0.5, map[0].length - 2);
             checkpoints.add(new Pair(cp1, new Pair("", null)));
             checkpoints.add(new Pair(cp2, new Pair("", null)));
             checkpoints.add(new Pair(cp1, new Pair("lineEnd", null)));
@@ -1468,11 +1469,11 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         // Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
         Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -mineLineEndOffset.get());
-        Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][0].getRight()+0.5, -1);
-        for (int i = 0; i < map[minedLines].length-1; i++) {
-            cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][i].getRight()+0.5, i);
-            if (i+2 >= map[minedLines].length) break;
-            BlockPos airPos = mapCorner.add(minedLines, map[minedLines][i+2].getRight(), i+2);
+        Vec3d cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][0].getRight() + 0.5, -1);
+        for (int i = 0; i < map[minedLines].length - 1; i++) {
+            cp2 = mapCorner.toCenterPos().add(minedLines, map[minedLines][i].getRight() + 0.5, i);
+            if (i + 2 >= map[minedLines].length) break;
+            BlockPos airPos = mapCorner.add(minedLines, map[minedLines][i + 2].getRight(), i + 2);
             if (MapAreaCache.getCachedBlockState(airPos).isAir()) break;
         }
         checkpoints.add(new Pair(cp1, new Pair("miningLineStart", null)));
@@ -1485,7 +1486,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void advanceMinedLines() {
         while (minedLines <= map.length) {
             minedLines++;
-            if(!isLineMined(minedLines)) return;
+            if (!isLineMined(minedLines)) return;
         }
     }
 
@@ -1524,9 +1525,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         // Only executed on Master
         if (!knownErrors.isEmpty()) {
             if (errorAction.get() == ErrorAction.ManualRepair) {
-                workingInterval = new Pair<>(0, map.length-1);
+                workingInterval = new Pair<>(0, map.length - 1);
                 info("Found errors: ");
-                for (int i = knownErrors.size()-1; i >= 0; i--) {
+                for (int i = knownErrors.size() - 1; i >= 0; i--) {
                     info("Pos: " + knownErrors.get(i).toShortString());
                 }
                 state = State.AwaitManualRepair;
@@ -1808,7 +1809,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 ConfigDeserializer.readFromJson(configFile.toPath());
 
             if (!data.type.equals("staircased")) {
-                error("Config file is of type "+ data.type +" and not 'staircased'.");
+                error("Config file is of type " + data.type + " and not 'staircased'.");
                 return false;
             }
             if (data.cartographyTable == null || data.finishedMapChest == null || data.dumpStation == null || data.mapCorner == null
@@ -1927,7 +1928,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 absoluteHeightMap[x][z] = new Pair<>(material, y);
             }
             if (z > 0) {
-                blockPaletteDict.put(blockId, new Pair(blockPaletteDict.get(blockId).getLeft(), blockPaletteDict.get(blockId).getRight()+1));
+                blockPaletteDict.put(blockId, new Pair(blockPaletteDict.get(blockId).getLeft(), blockPaletteDict.get(blockId).getRight() + 1));
             }
         }
         // Smooth the y pos out to max 1 block difference
@@ -1935,10 +1936,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         for (int x = 0; x < absoluteHeightMap.length; x++) {
             int totalYDiff = 0;
             for (int z = 1; z < absoluteHeightMap[0].length; z++) {
-                int predecessorY = absoluteHeightMap[x][z-1].getRight();
+                int predecessorY = absoluteHeightMap[x][z - 1].getRight();
                 int currentY = absoluteHeightMap[x][z].getRight();
                 totalYDiff += Math.max(-1, Math.min(currentY - predecessorY, 1));
-                smoothedHeightMap[x][z-1] = new Pair<>(absoluteHeightMap[x][z].getLeft(), totalYDiff);
+                smoothedHeightMap[x][z - 1] = new Pair<>(absoluteHeightMap[x][z].getLeft(), totalYDiff);
             }
         }
         return smoothedHeightMap;

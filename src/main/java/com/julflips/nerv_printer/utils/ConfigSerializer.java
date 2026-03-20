@@ -56,11 +56,11 @@ public final class ConfigSerializer {
         BlockPos mapCorner,
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict
     ) throws IOException {
-        writeToJson(file, type, reset, cartographyTable, finishedMapChest, null,null,
+        writeToJson(file, type, reset, cartographyTable, finishedMapChest, null, null,
             mapMaterialChests, dumpStation, mapCorner, materialDict, null);
     }
 
-    public static void writeToJson (
+    public static void writeToJson(
         Path file,
         String type,
         Pair<BlockPos, Vec3d> cartographyTable,

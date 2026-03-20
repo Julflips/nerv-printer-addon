@@ -7,5 +7,6 @@ public interface IClientPlayerInteractionManager {
     void setBlockBreakingCooldown(int cooldown);
 
     float getCurrentBreakingProgress();
+
     void clickSlot(int syncId, int slotId, int button, SlotActionType actionType, PlayerEntity player);
 }

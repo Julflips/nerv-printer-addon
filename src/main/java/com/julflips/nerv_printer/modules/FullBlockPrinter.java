@@ -45,7 +45,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class FullBlockPrinter extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
-    private final SettingGroup sgAdvanced = settings.createGroup("Advanced",  false);
+    private final SettingGroup sgAdvanced = settings.createGroup("Advanced", false);
     private final SettingGroup sgError = settings.createGroup("Error Handling");
     private final SettingGroup sgRender = settings.createGroup("Render");
 

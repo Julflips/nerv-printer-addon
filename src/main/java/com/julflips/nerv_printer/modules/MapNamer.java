@@ -206,7 +206,7 @@ public class MapNamer extends Module {
                 startX.set(currentX);
                 startY.set(currentY);
                 state = State.AwaitInteract;
-                info("All maps in inventory named. Progress (x: "+currentX+", y: "+currentY+") saved. " +
+                info("All maps in inventory named. Progress (x: " + currentX + ", y: " + currentY + ") saved. " +
                     "Interact with an anvil with the next batch in the inventory.");
                 if (mc.currentScreen != null) mc.player.closeHandledScreen();
             } else {

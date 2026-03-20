@@ -93,7 +93,8 @@ public final class SlaveSystem {
                 activeSlavesDict.put(slave, true);
             }
         }
-        if (printerModule != null && !printerModule.isActive() && !printerModule.getActivationReset()) printerModule.toggle();
+        if (printerModule != null && !printerModule.isActive() && !printerModule.getActivationReset())
+            printerModule.toggle();
     }
 
     public static void pauseAllSlaves() {
@@ -101,7 +102,8 @@ public final class SlaveSystem {
         for (String slave : activeSlavesDict.keySet()) {
             activeSlavesDict.put(slave, false);
         }
-        if (printerModule != null && printerModule.isActive() && !printerModule.getActivationReset()) printerModule.toggle();
+        if (printerModule != null && printerModule.isActive() && !printerModule.getActivationReset())
+            printerModule.toggle();
     }
 
     public static void skipNextBuilding() {
@@ -110,15 +112,15 @@ public final class SlaveSystem {
     }
 
     public static void generateIntervals() {
-        int sectionSize = (int) Math.ceil((float) 128 / (float) (slaves.size()+1));
+        int sectionSize = (int) Math.ceil((float) 128 / (float) (slaves.size() + 1));
         ArrayList<Pair<Integer, Integer>> intervals = new ArrayList<>();
-        for (int end = 127; end >= 0 ; end -= sectionSize) {
+        for (int end = 127; end >= 0; end -= sectionSize) {
             int start = Math.max(0, end - sectionSize + 1);
             intervals.add(new Pair<>(start, end));
         }
         Collections.reverse(intervals);
 
-        printerModule.setInterval(intervals.remove((intervals.size()-1)/2));
+        printerModule.setInterval(intervals.remove((intervals.size() - 1) / 2));
 
         // Remove all previously queued interval messages
         ArrayList<String> toBeRemoved = new ArrayList<>();
@@ -139,7 +141,7 @@ public final class SlaveSystem {
             return;
         }
         ArrayList<String> foundPlayers = new ArrayList<>();
-        for(Entity entity : mc.world.getEntities()) {
+        for (Entity entity : mc.world.getEntities()) {
             if (entity instanceof PlayerEntity player && !mc.player.equals(player)) {
                 foundPlayers.add(player.getName().getString());
             }
@@ -163,7 +165,7 @@ public final class SlaveSystem {
     }
 
     public static boolean canSeePlayer(String playerName) {
-        for(Entity entity : mc.world.getEntities()) {
+        for (Entity entity : mc.world.getEntities()) {
             if (entity instanceof PlayerEntity player && player.getName().getString().equals(playerName)) {
                 return true;
             }

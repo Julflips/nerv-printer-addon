@@ -31,7 +31,6 @@ public class Addon extends MeteorAddon {
         Modules.get().add(new FullBlockPrinter());
         Modules.get().add(new StaircasedPrinter());
         Modules.get().add(new MapNamer());
-
     }
 
     @Override

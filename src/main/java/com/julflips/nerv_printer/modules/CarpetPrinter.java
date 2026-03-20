@@ -56,7 +56,7 @@ import java.util.stream.IntStream;
 
 public class CarpetPrinter extends Module implements MapPrinter {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
-    private final SettingGroup sgAdvanced = settings.createGroup("Advanced",  false);
+    private final SettingGroup sgAdvanced = settings.createGroup("Advanced", false);
     private final SettingGroup sgMultiUser = settings.createGroup("Multi User", false);
     private final SettingGroup sgError = settings.createGroup("Error Handling");
     private final SettingGroup sgRender = settings.createGroup("Render", false);
@@ -905,7 +905,8 @@ public class CarpetPrinter extends Module implements MapPrinter {
         Vec3d goal = checkpoints.get(0).getLeft();
         if (PlayerUtils.distanceTo(goal.add(0, mc.player.getY() - goal.y, 0)) < checkpointBuffer.get()) {
             Pair<String, BlockPos> checkpointAction = checkpoints.get(0).getRight();
-            if (debugPrints.get() && checkpointAction.getLeft() != null) info("Reached: §a" + checkpointAction.getLeft());
+            if (debugPrints.get() && checkpointAction.getLeft() != null)
+                info("Reached: §a" + checkpointAction.getLeft());
             checkpoints.remove(0);
             switch (checkpointAction.getLeft()) {
                 case "lineEnd":
@@ -1033,7 +1034,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                 if (blockState.isAir() && posDistance <= placeRange.get() && posDistance > minPlaceDistance.get()
                     && MapAreaCache.isWithingMap(blockPos) && map[relativePos.getX()][relativePos.getZ()] != null
                     && blockPos.getX() <= currentGoal.getX() + linesPerRun.get() - 1 && !placements.contains(blockPos)
-                    && blockPos.getX() >= currentGoal.getX()-1) {
+                    && blockPos.getX() >= currentGoal.getX() - 1) {
                     if (closestPos.get() == null || posDistance < PlayerUtils.distanceTo(closestPos.get())) {
                         closestPos.set(new BlockPos(blockPos.getX(), blockPos.getY(), blockPos.getZ()));
                     }
@@ -1254,9 +1255,9 @@ public class CarpetPrinter extends Module implements MapPrinter {
     private boolean endBuilding() {
         if (!knownErrors.isEmpty()) {
             if (errorAction.get() == ErrorAction.ToggleOff) {
-                workingInterval = new Pair<>(0, map.length-1);
+                workingInterval = new Pair<>(0, map.length - 1);
                 info("Found errors: ");
-                for (int i = knownErrors.size()-1; i >= 0; i--) {
+                for (int i = knownErrors.size() - 1; i >= 0; i--) {
                     info("Pos: " + knownErrors.get(i).toShortString());
                 }
                 knownErrors.clear();
@@ -1267,9 +1268,9 @@ public class CarpetPrinter extends Module implements MapPrinter {
                 return false;
             }
             if (errorAction.get() == ErrorAction.Repair) {
-                workingInterval = new Pair<>(0, map.length-1);
+                workingInterval = new Pair<>(0, map.length - 1);
                 info("Fixing errors: ");
-                for (int i = knownErrors.size()-1; i >= 0; i--) {
+                for (int i = knownErrors.size() - 1; i >= 0; i--) {
                     BlockPos errorPos = knownErrors.get(i);
                     info("Pos: " + errorPos.toShortString());
                     checkpoints.add(new Pair(errorPos.toCenterPos(), new Pair("break", errorPos)));
@@ -1372,11 +1373,14 @@ public class CarpetPrinter extends Module implements MapPrinter {
         return activationReset.get();
     }
 
-    public void skipBuilding() {}
+    public void skipBuilding() {
+    }
 
-    public void mineLine(int lines) {}
+    public void mineLine(int lines) {
+    }
 
-    public void slaveFinished(String slave) {}
+    public void slaveFinished(String slave) {
+    }
 
     // Path Change Check
 
@@ -1445,7 +1449,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                 ConfigDeserializer.readFromJson(configFile.toPath());
 
             if (!data.type.equals("carpet")) {
-                error("Config file is of type "+ data.type +" and not 'carpet'.");
+                error("Config file is of type " + data.type + " and not 'carpet'.");
                 return false;
             }
             if (data.reset == null || data.cartographyTable == null || data.finishedMapChest == null || data.dumpStation == null || data.mapCorner == null || data.materialDict.isEmpty()) {
