@@ -1,7 +1,23 @@
 
-# Nerv Printer Addon
+<div align="center">
+  <!-- Logo and Title -->
+  <img src="/src/main/resources/assets/nerv/icon.png" alt="logo" width="20%"/>
+  <h1>Nerv Printer</h1>
+  <p>Nerv Printer is an addon for the Meteor Client allowing you to build mapart from NBT files. It works 100% autonomously and supports both carpet, fullblock, and staircasing. Its main focus is reliability and compatibility with strict anti-cheat servers.</p>
 
-Nerv Printer is an addon for the meteor client allowing you to build flat mapart from a batch of NBT files. It works 100% autonomously and supports both carpet and fullblock maps. Its main focus is reliability and compatibility with strict anti-cheat servers. Besides Meteor no other mod is needed to run this addon.
+  <!-- Shields -->
+[![Release](https://img.shields.io/github/v/release/Julflips/nerv-printer-addon)](https://github.com/Julflips/nerv-printer-addon/releases)
+[![Last Commit](https://img.shields.io/github/last-commit/Julflips/nerv-printer-addon)](https://github.com/Julflips/nerv-printer-addon/commits)
+[![Issues](https://img.shields.io/github/issues/Julflips/nerv-printer-addon)](https://github.com/Julflips/nerv-printer-addon/issues)
+[![Downloads](https://img.shields.io/github/downloads/Julflips/nerv-printer-addon/total)](https://github.com/Julflips/nerv-printer-addon/releases)
+[![Stars](https://img.shields.io/github/stars/Julflips/nerv-printer-addon)](https://github.com/Julflips/nerv-printer-addon/stargazers)
+</div>
+
+<hr />
+
+<div align="center">
+  <a href="https://discord.gg/9mrRPGKYU3"><img src="https://invidget.switchblade.xyz/9mrRPGKYU3"></a>
+</div>
 
 ## Carpet Printer
 The Carpet Printer prints the map line-by-line and does not reuse carpet items, making it only suited for servers where carpet duping is enabled. You can find the full documentation [here](Documentation/CarpetGuide.md).
