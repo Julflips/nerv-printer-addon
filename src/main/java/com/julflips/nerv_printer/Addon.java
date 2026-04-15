@@ -1,7 +1,6 @@
 package com.julflips.nerv_printer;
 
 import com.julflips.nerv_printer.modules.CarpetPrinter;
-import com.julflips.nerv_printer.modules.FullBlockPrinter;
 import com.julflips.nerv_printer.modules.MapNamer;
 import com.julflips.nerv_printer.modules.StaircasedPrinter;
 import com.julflips.nerv_printer.utils.MapAreaCache;
@@ -28,7 +27,6 @@ public class Addon extends MeteorAddon {
 
         // Modules
         Modules.get().add(new CarpetPrinter());
-        Modules.get().add(new FullBlockPrinter());
         Modules.get().add(new StaircasedPrinter());
         Modules.get().add(new MapNamer());
     }
