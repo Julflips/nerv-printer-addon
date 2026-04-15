@@ -1,6 +1,7 @@
 package com.julflips.nerv_printer.modules;
 
 import com.julflips.nerv_printer.Addon;
+import com.julflips.nerv_printer.interfaces.IClientPlayerInteractionManager;
 import com.julflips.nerv_printer.interfaces.MapPrinter;
 import com.julflips.nerv_printer.utils.*;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -818,7 +819,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
         // Swap into Hotbar
         if (toBeSwappedSlot != -1) {
-            Utils.swapIntoHotbar(toBeSwappedSlot, availableHotBarSlots);
+            swapIntoHotbar(toBeSwappedSlot);
             toBeSwappedSlot = -1;
             if (postSwapDelay.get() != 0) {
                 timeoutTicks = postSwapDelay.get();
@@ -1238,7 +1239,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             boolean lineFinished = true;
             for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
                 int adjustedX = x + lineBonus;
-                if (adjustedX > workingInterval.getRight()) break;
+                if (!Utils.isInInterval(workingInterval, adjustedX)) break;
                 for (int z = 0; z < 128; z++) {
                     BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, z));
                     if (blockState.isAir() && map[adjustedX][z] != null) {
@@ -1327,6 +1328,112 @@ public class CarpetPrinter extends Module implements MapPrinter {
             return -1;
         }
         return invInformation.getLeft().get(0);
+    }
+
+    private void swapIntoHotbar(int slot) {
+        Map<Item, Integer> itemSlot = new HashMap<>();
+        Map<Item, Integer> blocksUntilItemUse = new HashMap<>();
+        Map<Item, Integer> itemFrequency = new HashMap<>();
+
+        int targetSlot = availableHotBarSlots.get(0);
+
+        // Scan hotbar
+        for (int hotbarSlot : availableHotBarSlots) {
+            ItemStack stack = mc.player.getInventory().getStack(hotbarSlot);
+            if (!stack.isEmpty()) {
+                Item item = stack.getItem();
+                itemSlot.put(item, hotbarSlot);
+                blocksUntilItemUse.put(item, -1); // -1 = never used
+                itemFrequency.put(item, 0);
+            } else {
+                targetSlot = hotbarSlot;
+                break;
+            }
+        }
+
+        // PRIORITY 1: empty slot → instant choice
+        if (mc.player.getInventory().getStack(targetSlot).isEmpty()) {
+            info("Using priority 1");
+            Utils.performSwap(slot, targetSlot);
+            return;
+        }
+
+        // Get blocks until next use of items in hotbar
+        int blockCounter = 0;
+        for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
+            if (!Utils.isInInterval(workingInterval, x)) continue;
+
+            for (int z = 0; z < 128; z++) {
+                for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
+                    blockCounter++;
+                    int adjustedX = x + lineBonus;
+
+                    if (!Utils.isInInterval(workingInterval, adjustedX)) break;
+
+                    BlockState state = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, z));
+                    if (state.isAir()) {
+                        Block block = map[adjustedX][z];
+                        if (block == null) continue;
+
+                        Item item = block.asItem();
+
+                        if (blocksUntilItemUse.containsKey(item) &&
+                            blocksUntilItemUse.get(item) == -1) {
+                            blocksUntilItemUse.put(item, blockCounter);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Count frequency of items in hotbar
+        for (int hotbarSlot : availableHotBarSlots) {
+            ItemStack stack = mc.player.getInventory().getStack(hotbarSlot);
+            if (!stack.isEmpty()) {
+                Item item = stack.getItem();
+                itemFrequency.put(item, itemFrequency.get(item) + 1);
+            }
+        }
+
+        // Choose best candidate
+        Item bestItem = null;
+        int bestDistance = -2; // lower than -1
+        int bestFrequency = -1;
+
+        for (Item item : itemSlot.keySet()) {
+            int distance = blocksUntilItemUse.get(item); // -1 = never used
+            int frequency = itemFrequency.get(item);
+
+            boolean better = false;
+
+            // PRIORITY 2: never used (-1)
+            if (distance == -1 && bestDistance != -1) {
+                info("Using priority 2");
+                better = true;
+            }
+            // PRIORITY 3: farthest in future
+            else if (distance > bestDistance && bestDistance != -1) {
+                info("Using priority 3");
+                better = true;
+            }
+            // PRIORITY 4: frequency tie-breaker
+            else if (distance == bestDistance && frequency > bestFrequency) {
+                info("Using priority 4");
+                better = true;
+            }
+
+            if (better) {
+                bestItem = item;
+                bestDistance = distance;
+                bestFrequency = frequency;
+            }
+        }
+
+        if (bestItem != null) {
+            targetSlot = itemSlot.get(bestItem);
+        }
+
+        Utils.performSwap(slot, targetSlot);
     }
 
     // MapPrinter Interface for Slave Logic

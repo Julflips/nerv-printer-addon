@@ -196,52 +196,21 @@ public final class Utils {
         return -1;
     }
 
-    public static void swapIntoHotbar(int slot, ArrayList<Integer> hotBarSlots) {
-        HashMap<Item, Integer> itemFrequency = new HashMap<>();
-        HashMap<Item, Integer> itemSlot = new HashMap<>();
-        int targetSlot = hotBarSlots.get(0);
+    public static void performSwap(int fromSlot, int toSlot) {
+        ChatUtils.info("Swapping " + fromSlot + " into " + toSlot);
 
-        //Search the most frequent item in the hotbar
-        for (int i : hotBarSlots) {
-            if (!mc.player.getInventory().getStack(i).isEmpty()) {
-                Item item = mc.player.getInventory().getStack(i).getItem();
-                if (!itemFrequency.containsKey(item)) {
-                    itemFrequency.put(item, 1);
-                    itemSlot.put(item, i);
-                } else {
-                    itemFrequency.put(item, itemFrequency.get(item) + 1);
-                }
-            }
-        }
-        int topFrequency = 0;
-        ArrayList<Item> topFrequencyItems = new ArrayList<>();
-        for (Item item : itemFrequency.keySet()) {
-            if (itemFrequency.get(item) > topFrequency) {
-                topFrequency = itemFrequency.get(item);
-                topFrequencyItems = new ArrayList<>(Collections.singletonList(item));
-            } else if (itemFrequency.get(item) == topFrequency) {
-                topFrequencyItems.add(item);
-            }
-        }
-        if (!topFrequencyItems.isEmpty()) {
-            Random random = new Random();
-            Item item = topFrequencyItems.get(random.nextInt(topFrequencyItems.size()));
-            targetSlot = itemSlot.get(item);
-        }
+        mc.player.getInventory().setSelectedSlot(toSlot);
 
-        //Prefer emtpy slots
-        for (int i : hotBarSlots) {
-            if (mc.player.getInventory().getStack(i).isEmpty()) {
-                targetSlot = i;
-            }
-        }
+        IClientPlayerInteractionManager cim =
+            (IClientPlayerInteractionManager) mc.interactionManager;
 
-        //info("Swapping " + slot + " into " + targetSlot);
-        mc.player.getInventory().setSelectedSlot(targetSlot);
-
-        IClientPlayerInteractionManager cim = (IClientPlayerInteractionManager) mc.interactionManager;
-        cim.clickSlot(mc.player.currentScreenHandler.syncId, slot, targetSlot, SlotActionType.SWAP, mc.player);
-        //mc.getNetworkHandler().sendPacket(new ClickSlotC2SPacket(0, slot, targetSlot, 0, SlotActionType.SWAP, new ItemStack(Items.AIR), Int2ObjectMaps.emptyMap()));
+        cim.clickSlot(
+            mc.player.currentScreenHandler.syncId,
+            fromSlot,
+            toSlot,
+            SlotActionType.SWAP,
+            mc.player
+        );
     }
 
     public static void iterateBlocks(BlockPos startingPos, int horizontalRadius, int verticalRadius, BiConsumer<BlockPos, BlockState> function) {
