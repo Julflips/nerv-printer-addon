@@ -129,8 +129,12 @@ public final class SlaveSystem {
         }
         toBeRemoved.forEach((message) -> toBeSentMessages.remove(message));
 
+        // Sort slaves deterministically
+        ArrayList<String> sortedSlaves = new ArrayList<>(slaves);
+        Collections.sort(sortedSlaves, String.CASE_INSENSITIVE_ORDER);
+
         for (int i = 0; i < intervals.size(); i++) {
-            String slave = slaves.get(i);
+            String slave = sortedSlaves.get(i);
             SlaveSystem.queueDM(slave, "interval:" + intervals.get(i).getLeft() + ":" + intervals.get(i).getRight());
         }
     }
