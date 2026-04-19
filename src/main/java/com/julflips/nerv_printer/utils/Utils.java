@@ -197,8 +197,6 @@ public final class Utils {
     }
 
     public static void performSwap(int fromSlot, int toSlot) {
-        ChatUtils.info("Swapping " + fromSlot + " into " + toSlot);
-
         mc.player.getInventory().setSelectedSlot(toSlot);
 
         IClientPlayerInteractionManager cim =

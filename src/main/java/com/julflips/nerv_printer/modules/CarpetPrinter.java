@@ -1353,26 +1353,27 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
         // PRIORITY 1: empty slot → instant choice
         if (mc.player.getInventory().getStack(targetSlot).isEmpty()) {
-            info("Using priority 1");
             Utils.performSwap(slot, targetSlot);
             return;
         }
 
         // Get blocks until next use of items in hotbar
         int blockCounter = 0;
+        boolean isStartSide = true;
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
             if (!Utils.isInInterval(workingInterval, x)) continue;
 
             for (int z = 0; z < 128; z++) {
                 for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
-                    blockCounter++;
                     int adjustedX = x + lineBonus;
-
+                    int adjustedZ = z;
+                    if (!isStartSide) adjustedZ = 127 - z;
                     if (!Utils.isInInterval(workingInterval, adjustedX)) break;
 
-                    BlockState state = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, z));
+                    blockCounter++;
+                    BlockState state = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, adjustedZ));
                     if (state.isAir()) {
-                        Block block = map[adjustedX][z];
+                        Block block = map[adjustedX][adjustedZ];
                         if (block == null) continue;
 
                         Item item = block.asItem();
@@ -1384,6 +1385,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     }
                 }
             }
+            isStartSide = !isStartSide;
         }
 
         // Count frequency of items in hotbar
@@ -1408,17 +1410,14 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
             // PRIORITY 2: never used (-1)
             if (distance == -1 && bestDistance != -1) {
-                info("Using priority 2");
                 better = true;
             }
-            // PRIORITY 3: farthest in future
-            else if (distance > bestDistance && bestDistance != -1) {
-                info("Using priority 3");
+            // PRIORITY 3: hotbar frequency
+            else if (frequency > bestFrequency) {
                 better = true;
             }
-            // PRIORITY 4: frequency tie-breaker
-            else if (distance == bestDistance && frequency > bestFrequency) {
-                info("Using priority 4");
+            // PRIORITY 4: distance to next use
+            else if (frequency == bestFrequency && distance > bestDistance && bestDistance != -1) {
                 better = true;
             }
 

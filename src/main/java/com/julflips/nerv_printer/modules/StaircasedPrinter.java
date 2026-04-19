@@ -1666,7 +1666,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     private void swapIntoHotbar(int slot) {
         Map<Item, Integer> itemSlot = new HashMap<>();
-        Map<Item, Integer> blocksUntilItemUse = new HashMap<>();
+        Map<Item, Integer> itemDistance = new HashMap<>();
         Map<Item, Integer> itemFrequency = new HashMap<>();
 
         int targetSlot = availableHotBarSlots.get(0);
@@ -1677,7 +1677,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             if (!stack.isEmpty()) {
                 Item item = stack.getItem();
                 itemSlot.put(item, hotbarSlot);
-                blocksUntilItemUse.put(item, -1); // -1 = never used
+                itemDistance.put(item, -1); // -1 = never used
                 itemFrequency.put(item, 0);
             } else {
                 targetSlot = hotbarSlot;
@@ -1687,7 +1687,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
         // PRIORITY 1: empty slot → instant choice
         if (mc.player.getInventory().getStack(targetSlot).isEmpty()) {
-            info("Using priority 1");
             Utils.performSwap(slot, targetSlot);
             return;
         }
@@ -1696,20 +1695,19 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         int blockCounter = 0;
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
             for (int z = 0; z < 128; z++) {
+                if (!Utils.isInInterval(workingInterval, x)) break;
                 blockCounter++;
 
-                if (!Utils.isInInterval(workingInterval, x)) break;
-
-                BlockState state = MapAreaCache.getCachedBlockState(mapCorner.add(x, 0, z));
+                BlockState state = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
                 if (state.isAir()) {
                     Block block = map[x][z].getLeft();
                     if (block == null) continue;
 
                     Item item = block.asItem();
 
-                    if (blocksUntilItemUse.containsKey(item) &&
-                        blocksUntilItemUse.get(item) == -1) {
-                        blocksUntilItemUse.put(item, blockCounter);
+                    if (itemDistance.containsKey(item) &&
+                        itemDistance.get(item) == -1) {
+                        itemDistance.put(item, blockCounter);
                     }
                 }
             }
@@ -1730,24 +1728,21 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         int bestFrequency = -1;
 
         for (Item item : itemSlot.keySet()) {
-            int distance = blocksUntilItemUse.get(item); // -1 = never used
+            int distance = itemDistance.get(item); // -1 = never used
             int frequency = itemFrequency.get(item);
 
             boolean better = false;
 
             // PRIORITY 2: never used (-1)
             if (distance == -1 && bestDistance != -1) {
-                info("Using priority 2");
                 better = true;
             }
-            // PRIORITY 3: farthest in future
-            else if (distance > bestDistance && bestDistance != -1) {
-                info("Using priority 3");
+            // PRIORITY 3: hotbar frequency
+            else if (frequency > bestFrequency) {
                 better = true;
             }
-            // PRIORITY 4: frequency tie-breaker
-            else if (distance == bestDistance && frequency > bestFrequency) {
-                info("Using priority 4");
+            // PRIORITY 4: distance to next use
+            else if (frequency == bestFrequency && distance > bestDistance && bestDistance != -1) {
                 better = true;
             }
 
