@@ -1012,7 +1012,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 if (SlaveSystem.isSlave() && checkpoints.isEmpty()) {
                     refillMiningInventory();
                 } else {
-                    HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, workingInterval, availableSlots.size(), map);
+                    HashMap<Item, Integer> requiredItems = getRequiredItems();
                     Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
                     refillBuildingInventory(invInformation.getRight());
                 }
@@ -1251,7 +1251,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     private void refillBuildingInventory(HashMap<Item, Integer> invMaterial) {
         //Fills restockList with required build materials
         restockList.clear();
-        HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, workingInterval, availableSlots.size(), map);
+        HashMap<Item, Integer> requiredItems = getRequiredItems();
         for (Item item : invMaterial.keySet()) {
             int oldAmount = requiredItems.remove(item);
             requiredItems.put(item, oldAmount - invMaterial.get(item));
@@ -1633,7 +1633,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private int getDumpSlot() {
-        HashMap<Item, Integer> requiredItems = getRequiredItems(mapCorner, workingInterval, availableSlots.size(), map);
+        HashMap<Item, Integer> requiredItems = getRequiredItems();
         Pair<ArrayList<Integer>, HashMap<Item, Integer>> invInformation = Utils.getInvInformation(requiredItems, availableSlots);
         if (invInformation.getLeft().isEmpty()) {
             return -1;
@@ -1641,11 +1641,11 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         return invInformation.getLeft().get(0);
     }
 
-    public HashMap<Item, Integer> getRequiredItems(BlockPos mapCorner, Pair<Integer, Integer> interval, int availableSlotsSize, Pair<Block, Integer>[][] map) {
+    private HashMap<Item, Integer> getRequiredItems() {
         //Calculate the next items to restock
         //Iterate over map. Player has to be able to see the complete map area
         HashMap<Item, Integer> requiredItems = new HashMap<>();
-        for (int x = interval.getLeft(); x <= interval.getRight(); x++) {
+        for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
             for (int z = 0; z < 128; z++) {
                 BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
                 if (blockState.isAir() && map[x][z] != null) {
@@ -1654,7 +1654,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     if (!requiredItems.containsKey(material)) requiredItems.put(material, 0);
                     requiredItems.put(material, requiredItems.get(material) + 1);
                     //Check if the item fits into inventory. If not, undo the last increment and return
-                    if (Utils.stacksRequired(requiredItems.values()) > availableSlotsSize) {
+                    if (Utils.stacksRequired(requiredItems.values()) > availableSlots.size()) {
                         requiredItems.put(material, requiredItems.get(material) - 1);
                         return requiredItems;
                     }

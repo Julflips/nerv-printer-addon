@@ -75,37 +75,6 @@ public final class Utils {
         return slots;
     }
 
-    public static HashMap<Item, Integer> getRequiredItems(BlockPos mapCorner, Pair<Integer, Integer> interval, int linesPerRun, int availableSlotsSize, Block[][] map) {
-        //Calculate the next items to restock
-        //Iterate over map. Player has to be able to see the complete map area
-        HashMap<Item, Integer> requiredItems = new HashMap<>();
-        boolean isStartSide = true;
-        for (int x = interval.getLeft(); x <= interval.getRight(); x += linesPerRun) {
-            for (int z = 0; z < 128; z++) {
-                for (int lineBonus = 0; lineBonus < linesPerRun; lineBonus++) {
-                    int adjustedX = x + lineBonus;
-                    if (adjustedX > interval.getRight()) break;
-                    int adjustedZ = z;
-                    if (!isStartSide) adjustedZ = 127 - z;
-                    BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, adjustedZ));
-                    if (blockState.isAir() && map[adjustedX][adjustedZ] != null) {
-                        //ChatUtils.info("Add material for: " + mapCorner.add(x + lineBonus, 0, adjustedZ).toShortString());
-                        Item material = map[adjustedX][adjustedZ].asItem();
-                        if (!requiredItems.containsKey(material)) requiredItems.put(material, 0);
-                        requiredItems.put(material, requiredItems.get(material) + 1);
-                        //Check if the item fits into inventory. If not, undo the last increment and return
-                        if (stacksRequired(requiredItems.values()) > availableSlotsSize) {
-                            requiredItems.put(material, requiredItems.get(material) - 1);
-                            return requiredItems;
-                        }
-                    }
-                }
-            }
-            isStartSide = !isStartSide;
-        }
-        return requiredItems;
-    }
-
     public static Pair<ArrayList<Integer>, HashMap<Item, Integer>> getInvInformation(HashMap<Item, Integer> requiredItems, ArrayList<Integer> availableSlots) {
         //Return a list of slots to be dumped and a Hashmap of material-amount we can keep in the inventory
         ArrayList<Integer> dumpSlots = new ArrayList<>();
