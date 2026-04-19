@@ -476,7 +476,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     File mapFile;
 
     public StaircasedPrinter() {
-        super(Addon.CATEGORY, "staircased-printer", "Automatically builds full-block maps with staircasing from nbt files.");
+        super(Addon.CATEGORY, "fullblock-printer", "Automatically builds fullblock maps with optional staircasing from nbt files.");
     }
 
     @Override

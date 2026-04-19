@@ -1,6 +1,6 @@
-# Staircased Printer
+# Fullblock Printer
 
-The Staircased Printer builds arbitrary staircased fullblock maps line by line without any user interaction.
+The Fullblock Printer builds flat & staircased fullblock maps line by line without any user interaction.
 The bot mines all placed blocks again to recycle all used materials.
 The printer uses a mapart platform to collect all mined blocks and feeds them into an item sorter on the north side of the map.
 This module will not work on servers where placing blocks in the air is disabled.
