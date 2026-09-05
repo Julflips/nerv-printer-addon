@@ -22,7 +22,7 @@ public final class SlaveTableController {
     public void rebuild() {
         table.clear();
 
-        if (SlaveSystem.isSlave()) {
+        if (SlaveSystem.isSlave) {
             table.add(theme.label("Slave user can not control other slaves."));
             table.row();
             return;
@@ -30,9 +30,6 @@ public final class SlaveTableController {
 
 
         table.add(theme.label("Multi-User: "));
-
-        WButton register = table.add(theme.button("Register players in range")).widget();
-        register.action = SlaveSystem::registerSlaves;
 
         WButton pause = table.add(theme.button("Pause all")).widget();
         pause.action = () -> {
@@ -67,7 +64,7 @@ public final class SlaveTableController {
             WCheckbox visible = table.add(theme.checkbox(SlaveSystem.activeSlavesDict.get(slave))).widget();
             visible.action = () -> {
                 SlaveSystem.activeSlavesDict.put(slave, visible.checked);
-                SlaveSystem.queueDM(slave, visible.checked ? "start" : "pause");
+                SlaveSystem.sendToSlave(slave, visible.checked ? "start" : "pause");
                 rebuild();
             };
 

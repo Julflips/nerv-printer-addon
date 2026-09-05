@@ -308,48 +308,22 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     //Multi User
 
-    private final Setting<String> directMessageCommand = sgMultiUser.add(new StringSetting.Builder()
-        .name("direct-message-command")
-        .description("The command used to send direct messages between master and slaves.")
-        .defaultValue("w")
-        .onChanged((value) -> SlaveSystem.directMessageCommand = value)
+    private final Setting<String> tcpIp = sgMultiUser.add(new StringSetting.Builder()
+        .name("TCP-IP")
+        .description("The loopback IP used by bot-to-bot TCP communication.")
+        .defaultValue("127.0.0.1")
+        .onChanged(value -> updateTcpAddress())
         .build()
     );
 
-    private final Setting<String> senderPrefix = sgMultiUser.add(new StringSetting.Builder()
-        .name("sender-prefix")
-        .description("The text that always comes before the name of sender of every direct message.")
-        .defaultValue("")
-        .onChanged((value) -> SlaveSystem.senderPrefix = value)
-        .build()
-    );
-
-    private final Setting<String> senderSuffix = sgMultiUser.add(new StringSetting.Builder()
-        .name("sender-suffix")
-        .description("The text that is always between the name of the sender and the actual message.")
-        .defaultValue(" whispers: ")
-        .onChanged((value) -> SlaveSystem.senderSuffix = value)
-        .build()
-    );
-
-    private final Setting<Integer> commandDelay = sgMultiUser.add(new IntSetting.Builder()
-        .name("chat-message-delay")
-        .description("How many ticks to wait between sending chat messages (for multi-user printing).")
-        .defaultValue(50)
+    private final Setting<Integer> tcpPort = sgMultiUser.add(new IntSetting.Builder()
+        .name("TCP-port")
+        .description("The loopback TCP port used by bot-to-bot communication.")
+        .defaultValue(42069)
         .min(1)
-        .sliderRange(1, 100)
-        .onChanged((value) -> SlaveSystem.commandDelay = value)
-        .build()
-    );
-
-    private final Setting<Integer> randomSuffix = sgMultiUser.add(new IntSetting.Builder()
-        .name("random-suffix-length")
-        .description("Generate a randomized suffix to circumvent anti-spam plugins.")
-        .defaultValue(0)
-        .min(0)
-        .max(36)
-        .sliderRange(0, 10)
-        .onChanged((value) -> SlaveSystem.randomLength = value)
+        .max(65535)
+        .sliderRange(1, 65535)
+        .onChanged(value -> updateTcpAddress())
         .build()
     );
 
@@ -517,7 +491,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
         setInterval(new Pair<>(0, 127));
         // Initialize Slave System settings
-        SlaveSystem.setupSlaveSystem(this, commandDelay.get(), directMessageCommand.get(), senderPrefix.get(), senderSuffix.get(), randomSuffix.get());
+        SlaveSystem.setupSlaveSystem(this, tcpIp.get(), tcpPort.get());
 
         if (!customFolderPath.get()) {
             mapFolder = new File(Utils.getMinecraftDirectory(), "nerv-printer");
@@ -895,7 +869,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     state = State.Walking;
                     for (String slave : SlaveSystem.slaves) {
                         if (minedLines >= map.length) break;
-                        SlaveSystem.queueDM(slave, "mine:" + minedLines);
+                        SlaveSystem.sendToSlave(slave, "mine:" + minedLines);
                         advanceMinedLines();
                         SlaveSystem.activeSlavesDict.put(slave, true);
                         SlaveSystem.finishedSlavesDict.put(slave, false);
@@ -983,10 +957,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             if (isLineMined(relativeX)) {
                 miningPos = null;
                 timeoutTicks = mineLineEndTimeout.get();
-                if (SlaveSystem.isSlave()) {
+                if (SlaveSystem.isSlave) {
                     Utils.setBackwardPressed(false);
                     state = State.AwaitSlaveMineLine;
-                    SlaveSystem.queueMasterDM("finished");
+                    SlaveSystem.sendMessage("finished");
                     return;
                 } else {
                     if (minedLines < map.length) {
@@ -1009,7 +983,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             int dumpSlot = getDumpSlot();
             if (dumpSlot == -1) {
                 state = State.Walking;
-                if (SlaveSystem.isSlave() && checkpoints.isEmpty()) {
+                if (SlaveSystem.isSlave && checkpoints.isEmpty()) {
                     refillMiningInventory();
                 } else {
                     HashMap<Item, Integer> requiredItems = getRequiredItems();
@@ -1091,9 +1065,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                                 + MapAreaCache.getCachedBlockState(errorPos).getBlock().getName().getString()
                                 + ". Should be: " + map[relativePos.getX()][relativePos.getZ()].getLeft().getName().getString());
                         }
-                        if (SlaveSystem.isSlave()) {
+                        if (SlaveSystem.isSlave) {
                             // Obfuscate error pas as relative pos
-                            SlaveSystem.queueMasterDM("error:" + relativePos.getX() + ":" + relativePos.getZ());
+                            SlaveSystem.sendMessage("error:" + relativePos.getX() + ":" + relativePos.getZ());
                         }
                     }
                     knownErrors.addAll(newErrors);
@@ -1146,7 +1120,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             if (checkpoints.isEmpty()) {
                 if (state.equals(State.Walking)) {
                     // Done Building
-                    if (SlaveSystem.isSlave()) {
+                    if (SlaveSystem.isSlave) {
                         checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
                     } else {
                         if (SlaveSystem.allSlavesFinished()) {
@@ -1344,10 +1318,10 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             checkedChests.clear();
             restockList.remove(0);
             addClosestRestockCheckpoint();
-            if (SlaveSystem.isSlave() && checkpoints.isEmpty()) {
+            if (SlaveSystem.isSlave && checkpoints.isEmpty()) {
                 // Finish building as slave
                 state = State.AwaitSlaveMineLine;
-                SlaveSystem.queueMasterDM("finished");
+                SlaveSystem.sendMessage("finished");
                 return;
             }
         }
@@ -1506,7 +1480,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     private void startBuilding() {
         info("Start building map");
-        if (!SlaveSystem.isSlave()) SlaveSystem.startAllSlaves();
+        if (!SlaveSystem.isSlave) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         MapAreaCache.reset(mapCorner);
         calculateBuildingPath(true);
@@ -1570,7 +1544,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
         for (String slave : SlaveSystem.slaves) {
             if (minedLines >= map.length) break;
-            SlaveSystem.queueDM(slave, "mine:" + minedLines);
+            SlaveSystem.sendToSlave(slave, "mine:" + minedLines);
             advanceMinedLines();
             SlaveSystem.activeSlavesDict.put(slave, true);
             SlaveSystem.finishedSlavesDict.put(slave, false);
@@ -1804,7 +1778,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         if (availableSlots.isEmpty()) setupSlots();
         knownErrors.clear();
         checkpoints.clear();
-        if (SlaveSystem.isSlave()) {
+        if (SlaveSystem.isSlave) {
             checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
             state = State.Walking;
         } else {
@@ -1821,7 +1795,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     public void slaveFinished(String slave) {
         if (minedLines < map.length) {
-            SlaveSystem.queueDM(slave, "mine:" + minedLines);
+            SlaveSystem.sendToSlave(slave, "mine:" + minedLines);
             advanceMinedLines();
             SlaveSystem.activeSlavesDict.put(slave, true);
             SlaveSystem.finishedSlavesDict.put(slave, false);
@@ -1832,6 +1806,13 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         minedLines = lines;
         calculateMiningPath();
         state = State.Walking;
+    }
+
+    private void updateTcpAddress() {
+        if (mc == null || mc.world == null || !isActive()) return;
+        if (tcpIp != null && tcpPort != null) {
+            SlaveSystem.setTcpAddress(tcpIp.get(), tcpPort.get());
+        }
     }
 
     // Path Change Check
