@@ -598,16 +598,19 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 MapAreaCache.reset(lowerMapCorner);
                 state = State.SelectingUpperMapArea;
                 info("LowerMap Area selected. Select the §aUpper Map Area.");
-                break;
+                return;
             case SelectingUpperMapArea:
                 hitPos = packet.getBlockHitResult().getBlockPos().offset(packet.getBlockHitResult().getSide());
                 adjustedX = Utils.getIntervalStart(hitPos.getX());
                 adjustedZ = Utils.getIntervalStart(hitPos.getZ() + 1);
                 // Move Z down by one to include the north line as players are likely to use it for registration
                 upperMapCorner = new BlockPos(adjustedX, hitPos.getY(), adjustedZ - 1);
-                MapAreaCache.reset(lowerMapCorner);
-                state = State.SelectingTable;
-                info("Map Area selected. Select the §aCartography Table.");
+                if (upperMapCorner.getX() == lowerMapCorner.getX() &&
+                    upperMapCorner.getZ() == lowerMapCorner.getZ() &&
+                    upperMapCorner.getY() > lowerMapCorner.getY()) {
+                    state = State.SelectingTable;
+                    info("Upper Map Area selected. Select the §aCartography Table.");
+                }
                 break;
             case SelectingTable:
                 BlockPos blockPos = packet.getBlockHitResult().getBlockPos();
@@ -1977,7 +1980,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 return false;
             }
             if (data.cartographyTable == null || data.finishedMapChest == null || data.dumpStation == null || data.mapCorner == null
-                || data.materialDict.isEmpty() || data.usedToolChest == null || toolSet == null) {
+                || data.upperMapCorner == null || data.materialDict.isEmpty() || data.usedToolChest == null || toolSet == null) {
                 error("Config file is missing required data.");
                 return false;
             }
@@ -1988,6 +1991,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             this.mapMaterialChests = data.mapMaterialChests;
             this.dumpStation = data.dumpStation;
             this.lowerMapCorner = data.mapCorner;
+            this.upperMapCorner = data.upperMapCorner;
             MapAreaCache.reset(lowerMapCorner);
             this.materialDict = data.materialDict;
             this.toolSet = data.toolSet;

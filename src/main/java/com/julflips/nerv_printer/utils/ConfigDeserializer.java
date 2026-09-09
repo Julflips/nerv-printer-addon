@@ -57,6 +57,7 @@ public final class ConfigDeserializer {
         public ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests;
         public Pair<Vec3d, Pair<Float, Float>> dumpStation;
         public BlockPos mapCorner;
+        public BlockPos upperMapCorner;
         public HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict;
         public Set<ItemStack> toolSet;
     }
@@ -110,6 +111,7 @@ public final class ConfigDeserializer {
             }
 
             data.mapCorner = jsonToBlockPos(root.getAsJsonObject("mapCorner"));
+            data.upperMapCorner = jsonToBlockPos(root.getAsJsonObject("upperMapCorner"));
 
             data.materialDict = new HashMap<>();
             if (root.has("materialDict")) {

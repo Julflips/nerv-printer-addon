@@ -45,6 +45,7 @@ public final class ConfigSerializer {
         return obj;
     }
 
+    // Carpet Printer
     public static void writeToJson(
         Path file,
         String type,
@@ -57,9 +58,10 @@ public final class ConfigSerializer {
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict
     ) throws IOException {
         writeToJson(file, type, reset, cartographyTable, finishedMapChest, null, null,
-            mapMaterialChests, dumpStation, mapCorner, materialDict, null);
+            mapMaterialChests, dumpStation, mapCorner, null, materialDict, null);
     }
 
+    // Staircased Printer
     public static void writeToJson(
         Path file,
         String type,
@@ -74,7 +76,26 @@ public final class ConfigSerializer {
         Set<ItemStack> toolSet
     ) throws IOException {
         writeToJson(file, type, null, cartographyTable, finishedMapChest, usedToolChest, bed,
-            mapMaterialChests, dumpStation, mapCorner, materialDict, toolSet);
+            mapMaterialChests, dumpStation, mapCorner, null, materialDict, toolSet);
+    }
+
+    // Suppression Printer
+    public static void writeToJson(
+        Path file,
+        String type,
+        Pair<BlockPos, Vec3d> cartographyTable,
+        Pair<BlockPos, Vec3d> finishedMapChest,
+        Pair<BlockPos, Vec3d> usedToolChest,
+        Pair<BlockPos, Vec3d> bed,
+        ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests,
+        Pair<Vec3d, Pair<Float, Float>> dumpStation,
+        BlockPos mapCorner,
+        BlockPos upperMapCorner,
+        HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict,
+        Set<ItemStack> toolSet
+    ) throws IOException {
+        writeToJson(file, type, null, cartographyTable, finishedMapChest, usedToolChest, bed,
+            mapMaterialChests, dumpStation, mapCorner, upperMapCorner, materialDict, toolSet);
     }
 
     public static void writeToJson(
@@ -88,6 +109,7 @@ public final class ConfigSerializer {
         ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests,
         Pair<Vec3d, Pair<Float, Float>> dumpStation,
         BlockPos mapCorner,
+        BlockPos upperMapCorner,
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict,
         Set<ItemStack> toolSet
     ) throws IOException {
@@ -117,6 +139,7 @@ public final class ConfigSerializer {
         }
 
         if (mapCorner != null) root.add("mapCorner", blockPosToJson(mapCorner));
+        if (upperMapCorner != null) root.add("upperMapCorner", blockPosToJson(upperMapCorner));
 
         if (materialDict != null) {
             JsonObject materialDictObj = new JsonObject();
