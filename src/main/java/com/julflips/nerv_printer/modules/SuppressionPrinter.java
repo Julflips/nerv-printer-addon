@@ -455,7 +455,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     Pair<BlockPos, Vec3d> bed;
     ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests;
     Pair<Vec3d, Pair<Float, Float>> dumpStation;                    // Pos, Yaw, Pitch
-    BlockPos mapCorner;
     BlockPos tempChestPos;
     BlockPos lastInteractedChest;
     BlockPos miningPos;
@@ -474,6 +473,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     ArrayList<BlockPos> knownErrors;
     File mapFolder;
     File mapFile;
+    BlockPos lowerMapCorner;
+    BlockPos upperMapCorner;
     Block[][][] mapLayer1;                                          // Map pre-suppression
     Block[][][] mapLayer2;                                          // Map post-suppression
     Block[][][] activeMapLayer;                                     // Map that is currently built
@@ -499,7 +500,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         restockBacklogSlots = new ArrayList<>();
         knownErrors = new ArrayList<>();
         usedToolChest = null;
-        mapCorner = null;
+        lowerMapCorner = null;
         lastInteractedChest = null;
         miningPos = null;
         cartographyTable = null;
@@ -559,14 +560,14 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
         if (!prepareNextMapFile()) return;
 
-        state = State.SelectingMapArea;
+        state = State.SelectingLowerMapArea;
         if (useDefaultConfigFile.get()) {
             File configFolder = new File(mapFolder, "_configs");
             if (!loadConfig(new File(configFolder, configFileName.get()))) {
-                info("Select the §aMap Building Area (128x128). (Right-click the edge from the inside)");
+                info("Select the §aLower Map Building Area (128x128). (Right-click anywhere on the floor)");
             }
         } else {
-            info("Select the §aMap Building Area (128x128). (Right-click the edge from the inside)");
+            info("Select the §aaLower Map Building Area (128x128). (Right-click anywhere on the floor)");
         }
     }
 
@@ -588,13 +589,23 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         }
         if (!(event.packet instanceof PlayerInteractBlockC2SPacket packet) || state == null) return;
         switch (state) {
-            case SelectingMapArea:
+            case SelectingLowerMapArea:
                 BlockPos hitPos = packet.getBlockHitResult().getBlockPos().offset(packet.getBlockHitResult().getSide());
                 int adjustedX = Utils.getIntervalStart(hitPos.getX());
                 int adjustedZ = Utils.getIntervalStart(hitPos.getZ() + 1);
                 // Move Z down by one to include the north line as players are likely to use it for registration
-                mapCorner = new BlockPos(adjustedX, hitPos.getY(), adjustedZ - 1);
-                MapAreaCache.reset(mapCorner);
+                lowerMapCorner = new BlockPos(adjustedX, hitPos.getY(), adjustedZ - 1);
+                MapAreaCache.reset(lowerMapCorner);
+                state = State.SelectingUpperMapArea;
+                info("LowerMap Area selected. Select the §aUpper Map Area.");
+                break;
+            case SelectingUpperMapArea:
+                hitPos = packet.getBlockHitResult().getBlockPos().offset(packet.getBlockHitResult().getSide());
+                adjustedX = Utils.getIntervalStart(hitPos.getX());
+                adjustedZ = Utils.getIntervalStart(hitPos.getZ() + 1);
+                // Move Z down by one to include the north line as players are likely to use it for registration
+                upperMapCorner = new BlockPos(adjustedX, hitPos.getY(), adjustedZ - 1);
+                MapAreaCache.reset(lowerMapCorner);
                 state = State.SelectingTable;
                 info("Map Area selected. Select the §aCartography Table.");
                 break;
@@ -1067,11 +1078,11 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
             switch (checkpointAction.getLeft()) {
                 case "lineEnd":
-                    boolean reachedNorthSide = goal.z == mapCorner.toCenterPos().z;
+                    boolean reachedNorthSide = goal.z == lowerMapCorner.toCenterPos().z;
                     calculateBuildingPath(reachedNorthSide, false);
                     ArrayList<BlockPos> newErrors = getInvalidPlacements();
                     for (BlockPos errorPos : newErrors) {
-                        BlockPos relativePos = errorPos.subtract(mapCorner);
+                        BlockPos relativePos = errorPos.subtract(lowerMapCorner);
                         if (logErrors.get()) {
                             info("Error at: " + errorPos.toShortString() + ". Is: "
                                 + MapAreaCache.getCachedBlockState(errorPos).getBlock().getName().getString()
@@ -1386,7 +1397,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     }
 
     private void tryPlacingBlock(BlockPos pos) {
-        BlockPos relativePos = pos.subtract(mapCorner);
+        BlockPos relativePos = pos.subtract(lowerMapCorner);
         Item material = activeMapLayer[relativePos.getX()][relativePos.getZ()][relativePos.getY()].asItem();
         //info("Placing " + material.getName().getString() + " at: " + relativePos.toShortString());
         //Check hot-bar slots
@@ -1414,7 +1425,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         if (lastSwappedMaterial == material) return;      //Wait for swapped material
         if (debugPrints.get()) info("No " + material.getName().getString() + " found in inventory. Resetting...");
         mc.player.setVelocity(0, 0, 0);
-        Vec3d pathCheckpoint = new Vec3d(mc.player.getX(), mapCorner.up().getY(), mapCorner.north().toCenterPos().getZ());
+        Vec3d pathCheckpoint = new Vec3d(mc.player.getX(), lowerMapCorner.up().getY(), lowerMapCorner.north().toCenterPos().getZ());
         checkpoints.add(0, new Pair(mc.player.getEntityPos(), new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(pathCheckpoint, new Pair("walkRestock", null)));
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
@@ -1432,7 +1443,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     if (!Utils.isInInterval(workingInterval, adjustedX)) break;
                     for (int y = 0; y < activeMapLayer[0][0].length; y++) {
                         int adjustedZ = flippedZ ? activeMapLayer[0].length-1-z : z;
-                        BlockPos blockPos = mapCorner.add(adjustedX, y, adjustedZ);
+                        BlockPos blockPos = lowerMapCorner.add(adjustedX, y, adjustedZ);
                         BlockState blockState = MapAreaCache.getCachedBlockState(blockPos);
                         if (blockState.isAir() && activeMapLayer[adjustedX][adjustedZ][y] != null
                             && mc.player.getX() > blockPos.toCenterPos().getX() + 0.5f) {
@@ -1461,7 +1472,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 if (!Utils.isInInterval(workingInterval, adjustedX)) break;
                 for (int z = 0; z < activeMapLayer[0].length; z++) {
                     for (int y = 0; y < activeMapLayer[0][0].length; y++) {
-                        BlockState blockState = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, y, z));
+                        BlockState blockState = MapAreaCache.getCachedBlockState(lowerMapCorner.add(adjustedX, y, z));
                         if (blockState.isAir() && activeMapLayer[adjustedX][z][y] != null) {
                             //If there is a replaceable block and not an ignored block type at the position. Mark the line as not done
                             lineFinished = false;
@@ -1472,8 +1483,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             }
             if (lineFinished) continue;
 
-            Vec3d cp1 = mapCorner.toCenterPos().add(x + linesPerRun.get(), 0, -0.3f);
-            Vec3d cp2 = mapCorner.toCenterPos().add(x + linesPerRun.get(), 0, activeMapLayer[0].length - 0.7f);
+            Vec3d cp1 = lowerMapCorner.toCenterPos().add(x + linesPerRun.get(), 0, -0.3f);
+            Vec3d cp2 = lowerMapCorner.toCenterPos().add(x + linesPerRun.get(), 0, activeMapLayer[0].length - 0.7f);
             if (northToSouth) {
                 Pair<Vec3d, Pair<String, BlockPos>> newCP1 = new Pair(cp1, new Pair("lineBegin", null));
                 if (!generatedFirstLine) {
@@ -1558,7 +1569,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
         if (!SlaveSystem.isSlave) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
-        MapAreaCache.reset(mapCorner);
+        MapAreaCache.reset(lowerMapCorner);
         calculateBuildingPath(true, true);
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         if (sleep.get()) {
@@ -1647,7 +1658,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         for (int x = workingInterval.getRight(); x >= workingInterval.getLeft(); x--) {
             for (int z = mapLayer1[0].length - 1; z >= 0; z--) {
                 for (int y = 0; y < mapLayer1[0].length; y++) {
-                    BlockPos absolutePos = mapCorner.add(x, y, z);
+                    BlockPos absolutePos = lowerMapCorner.add(x, y, z);
                     if (knownErrors.contains(absolutePos)) continue;
                     BlockState blockState = MapAreaCache.getCachedBlockState(absolutePos);
                     Block block = blockState.getBlock();
@@ -1905,8 +1916,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             error("No config file name selected.");
             return;
         }
-        if (cartographyTable == null || finishedMapChest == null || dumpStation == null || mapCorner == null
-            || materialDict.isEmpty() || usedToolChest == null || toolSet.isEmpty()) {
+        if (cartographyTable == null || finishedMapChest == null || dumpStation == null || lowerMapCorner == null
+            || upperMapCorner == null || materialDict.isEmpty() || usedToolChest == null || toolSet.isEmpty()) {
             error("Cannot save config: Missing required data.");
             return;
         }
@@ -1920,7 +1931,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 bed,
                 mapMaterialChests,
                 dumpStation,
-                mapCorner,
+                lowerMapCorner,
+                upperMapCorner,
                 materialDict,
                 toolSet);
             Text configText = Text.literal(configFile.getName())
@@ -1947,7 +1959,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             State.SelectingUsedPickaxeChest,
             State.SelectingDumpStation,
             State.SelectingTable,
-            State.SelectingMapArea,
+            State.SelectingLowerMapArea,
+            State.SelectingUpperMapArea,
             State.AwaitRegisterResponse
         );
         if (!allowedStates.contains(state)) {
@@ -1974,8 +1987,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             this.bed = data.bed;
             this.mapMaterialChests = data.mapMaterialChests;
             this.dumpStation = data.dumpStation;
-            this.mapCorner = data.mapCorner;
-            MapAreaCache.reset(mapCorner);
+            this.lowerMapCorner = data.mapCorner;
+            MapAreaCache.reset(lowerMapCorner);
             this.materialDict = data.materialDict;
             this.toolSet = data.toolSet;
             Text configText = Text.literal(configFile.getName())
@@ -2244,9 +2257,10 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     @EventHandler
     private void onRender(Render3DEvent event) {
-        if (mapCorner == null || !render.get()) return;
+        if (lowerMapCorner == null || upperMapCorner == null || !render.get()) return;
 
-        event.renderer.box(mapCorner.getX(), mapCorner.getY(), mapCorner.getZ(), mapCorner.getX() + activeMapLayer.length, mapCorner.getY(), mapCorner.getZ() + activeMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
+        event.renderer.box(lowerMapCorner.getX(), lowerMapCorner.getY(), lowerMapCorner.getZ(), lowerMapCorner.getX() + activeMapLayer.length, lowerMapCorner.getY(), lowerMapCorner.getZ() + activeMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
+        event.renderer.box(upperMapCorner.getX(), upperMapCorner.getY(), upperMapCorner.getZ(), upperMapCorner.getX() + activeMapLayer.length, upperMapCorner.getY(), upperMapCorner.getZ() + activeMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
 
         if (renderMap.get() && !(state.equals(State.Mining) || state.equals(State.AwaitBlockBreak))) {
             if (mapLayer1 != null && mapLayer2 != null) {
@@ -2260,7 +2274,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                                 if (material.equals(fillerBlock.get())) {
                                     color = Color.RED;
                                 }
-                                event.renderer.box(new BlockPos(mapCorner.getX() + x, mapCorner.getY() + y, mapCorner.getZ() + z), color, color, ShapeMode.Lines, 0);
+                                event.renderer.box(new BlockPos(lowerMapCorner.getX() + x, lowerMapCorner.getY() + y, lowerMapCorner.getZ() + z), color, color, ShapeMode.Lines, 0);
                             }
                         }
                     }
@@ -2275,7 +2289,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                                 if (material.equals(fillerBlock.get())) {
                                     color = Color.RED;
                                 }
-                                event.renderer.box(new BlockPos(mapCorner.getX() + x, mapCorner.getY() + y, mapCorner.getZ() + z), color, color, ShapeMode.Lines, 0);
+                                event.renderer.box(new BlockPos(lowerMapCorner.getX() + x, lowerMapCorner.getY() + y, lowerMapCorner.getZ() + z), color, color, ShapeMode.Lines, 0);
                             }
                         }
                     }
@@ -2343,7 +2357,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
                     for (int y = 0; y < activeMapLayer[adjustedX][z].length; y++) {
                         Block block = activeMapLayer[adjustedX][z][y];
-                        BlockPos pos = mapCorner.add(adjustedX, y, z);
+                        BlockPos pos = lowerMapCorner.add(adjustedX, y, z);
                         BlockState state = MapAreaCache.getCachedBlockState(pos);
 
                         action.accept(adjustedX, z, y, state, block);
@@ -2359,7 +2373,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     }
 
     private enum State {
-        SelectingMapArea,
+        SelectingLowerMapArea,
+        SelectingUpperMapArea,
         SelectingTable,
         SelectingUsedPickaxeChest,
         SelectingDumpStation,
