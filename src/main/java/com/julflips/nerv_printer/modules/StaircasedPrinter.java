@@ -154,7 +154,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     public final Setting<String> configFileName = sgGeneral.add(new StringSetting.Builder()
         .name("config-file-name")
         .description("The config file that is loaded  when the module is enabled.")
-        .defaultValue("carpet-printer-config.json")
+        .defaultValue("staircased-config.json")
         .wide()
         .renderer(StarscriptTextBoxRenderer.class)
         .visible(() -> useDefaultConfigFile.get())
@@ -611,23 +611,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     tempChestPos = blockPos;
                     state = State.AwaitRegisterResponse;
                 }
-                if (startBlocks.get().contains(blockState.getBlock())) {
-                    //Check if requirements to start building are met
-                    if (materialDict.isEmpty()) {
-                        warning("No Material Chests selected!");
-                        return;
-                    }
-                    if (toolSet.isEmpty()) {
-                        warning("No Tool Chests selected!");
-                        return;
-                    }
-                    if (mapMaterialChests.isEmpty()) {
-                        warning("No Map Chests selected!");
-                        return;
-                    }
-
-                    startBuilding();
-                }
+                if (startBlocks.get().contains(blockState.getBlock())) startBuilding();
                 break;
         }
     }
@@ -1054,6 +1038,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 info("Reached: §a" + checkpointAction.getLeft());
             if (snapToCheckpoints.get()) mc.player.setPosition(goal.x, mc.player.getY(), goal.z);
             checkpoints.remove(0);
+
             switch (checkpointAction.getLeft()) {
                 case "lineEnd":
                     calculateBuildingPath(false);
@@ -1137,7 +1122,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             goal = checkpoints.get(0).getLeft();
         }
 
-        //Set yaw rotation
+        // Set yaw rotation to goal
         double lookZ = goal.z;
         if (PlayerUtils.distanceTo(goal) > 2) {
             lookZ = mc.player.getZ() + Math.max(Math.min(goal.z - mc.player.getZ(), 1), -1);
@@ -1149,7 +1134,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             mc.player.setYaw((float) Rotations.getYaw(lookPos) + 180f);
         }
 
-        // Set print mode
+        // Set sprint mode
         String nextAction = checkpoints.get(0).getRight().getLeft();
         if ((nextAction == "" || nextAction == "lineEnd") && sprinting.get() != SprintMode.Always) {
             mc.player.setSprinting(false);
@@ -1383,7 +1368,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             }
         }
         if (lastSwappedMaterial == material) return;      //Wait for swapped material
-        info("No " + material.getName().getString() + " found in inventory. Resetting...");
+        if (debugPrints.get()) info("No " + material.getName().getString() + " found in inventory. Resetting...");
         mc.player.setVelocity(0, 0, 0);
         Vec3d pathCheckpoint = new Vec3d(mc.player.getX(), mapCorner.toCenterPos().getY(), mapCorner.north().toCenterPos().getZ());
         checkpoints.add(0, new Pair(mc.player.getEntityPos(), new Pair("walkRestock", null)));
@@ -1479,7 +1464,21 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     }
 
     private void startBuilding() {
-        info("Start building map");
+        if (debugPrints.get()) info("Start building map");
+        //Check if requirements to start building are met
+        if (materialDict.isEmpty()) {
+            warning("No Material Chests selected!");
+            return;
+        }
+        if (toolSet.isEmpty()) {
+            warning("No Tool Chests selected!");
+            return;
+        }
+        if (mapMaterialChests.isEmpty()) {
+            warning("No Map Chests selected!");
+            return;
+        }
+
         if (!SlaveSystem.isSlave) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         MapAreaCache.reset(mapCorner);
@@ -2039,7 +2038,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         saveButton.action = () -> {
             String path = TinyFileDialogs.tinyfd_saveFileDialog(
                 "Save Config",
-                new File(configFolder, "staircased-printer-config.json").getAbsolutePath(),
+                new File(configFolder, "staircased-config.json").getAbsolutePath(),
                 null,
                 null
             );
@@ -2051,7 +2050,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         loadButton.action = () -> {
             String path = TinyFileDialogs.tinyfd_openFileDialog(
                 "Load Config",
-                new File(configFolder, "staircased-printer-config.json").getAbsolutePath(),
+                new File(configFolder, "staircased-config.json").getAbsolutePath(),
                 null,
                 null,
                 false

@@ -179,7 +179,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
     public final Setting<String> configFileName = sgGeneral.add(new StringSetting.Builder()
         .name("config-file-name")
         .description("The config file that is loaded  when the module is enabled.")
-        .defaultValue("carpet-printer-config.json")
+        .defaultValue("carpet-config.json")
         .wide()
         .renderer(StarscriptTextBoxRenderer.class)
         .visible(() -> useDefaultConfigFile.get())
@@ -550,22 +550,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     tempChestPos = blockPos;
                     state = State.AwaitRegisterResponse;
                 }
-                if (startBlocks.get().contains(blockState.getBlock())) {
-                    //Check if requirements to start building are met
-                    if (materialDict.isEmpty()) {
-                        warning("No Material Chests selected!");
-                        return;
-                    }
-                    if (mapMaterialChests.isEmpty()) {
-                        warning("No Map Chests selected!");
-                        return;
-                    }
-                    if (!setupSlots()) {
-                        return;
-                    }
-
-                    startBuilding();
-                }
+                if (startBlocks.get().contains(blockState.getBlock())) startBuilding();
                 break;
         }
     }
@@ -881,6 +866,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             if (debugPrints.get() && checkpointAction.getLeft() != null)
                 info("Reached: §a" + checkpointAction.getLeft());
             checkpoints.remove(0);
+
             switch (checkpointAction.getLeft()) {
                 case "lineEnd":
                     boolean reachedNorthSide = goal.z == mapCorner.toCenterPos().z;
@@ -1010,9 +996,12 @@ public class CarpetPrinter extends Module implements MapPrinter {
             }
             goal = checkpoints.get(0).getLeft();
         }
+
+        // Set yaw rotation to goal
         mc.player.setYaw((float) Rotations.getYaw(goal));
         String nextAction = checkpoints.get(0).getRight().getLeft();
 
+        // Set sprint mode
         if ((nextAction == "" || nextAction == "lineEnd") && sprinting.get() != SprintMode.Always) {
             mc.player.setSprinting(false);
         } else if (sprinting.get() != SprintMode.Off) {
@@ -1194,7 +1183,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             }
         }
         if (lastSwappedMaterial == material) return false;      //Wait for swapped material
-        info("No " + material.getName().getString() + " found in inventory. Resetting...");
+        if (debugPrints.get()) info("No " + material.getName().getString() + " found in inventory. Resetting...");
         checkpoints.add(0, new Pair(mc.player.getEntityPos(), new Pair("sprint", null)));
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         return false;
@@ -1208,7 +1197,6 @@ public class CarpetPrinter extends Module implements MapPrinter {
         boolean northToSouth = startNorthSide;
         checkpoints.clear();
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
-            if (!Utils.isInInterval(workingInterval, x)) continue;
             boolean lineFinished = true;
             for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
                 int adjustedX = x + lineBonus;
@@ -1242,6 +1230,20 @@ public class CarpetPrinter extends Module implements MapPrinter {
     }
 
     private void startBuilding() {
+        if (debugPrints.get()) info("Start building map");
+        //Check if requirements to start building are met
+        if (materialDict.isEmpty()) {
+            warning("No Material Chests selected!");
+            return;
+        }
+        if (mapMaterialChests.isEmpty()) {
+            warning("No Map Chests selected!");
+            return;
+        }
+        if (!setupSlots()) {
+            return;
+        }
+
         if (!SlaveSystem.isSlave) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         MapAreaCache.reset(mapCorner);
@@ -1384,14 +1386,12 @@ public class CarpetPrinter extends Module implements MapPrinter {
         boolean northToSouth = startNorthToSouth.get();
         boolean hasFoundAir = false;
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
-            if (!Utils.isInInterval(workingInterval, x)) continue;
-
             for (int z = 0; z < 128; z++) {
                 for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
                     int adjustedX = x + lineBonus;
+                    if (!Utils.isInInterval(workingInterval, adjustedX)) break;
                     int adjustedZ = z;
                     if (!northToSouth) adjustedZ = 127 - z;
-                    if (!Utils.isInInterval(workingInterval, adjustedX)) break;
 
                     blockCounter++;
                     BlockState state = MapAreaCache.getCachedBlockState(mapCorner.add(adjustedX, 0, adjustedZ));
@@ -1684,7 +1684,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         saveButton.action = () -> {
             String path = TinyFileDialogs.tinyfd_saveFileDialog(
                 "Save Config",
-                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
+                new File(configFolder, "carpet-config.json").getAbsolutePath(),
                 null,
                 null
             );
@@ -1696,7 +1696,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         loadButton.action = () -> {
             String path = TinyFileDialogs.tinyfd_openFileDialog(
                 "Load Config",
-                new File(configFolder, "carpet-printer-config.json").getAbsolutePath(),
+                new File(configFolder, "carpet-config.json").getAbsolutePath(),
                 null,
                 null,
                 false
