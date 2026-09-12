@@ -446,6 +446,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         restockBacklogSlots = new ArrayList<>();
         usedToolChest = null;
         lowerMapCorner = null;
+        upperMapCorner = null;
         lastInteractedChest = null;
         miningPos = null;
         cartographyTable = null;
@@ -494,6 +495,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     @Override
     public void onDeactivate() {
+        LocalTcpTransport.close();
         Utils.setForwardPressed(false);
     }
 
@@ -1360,7 +1362,25 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             return;
         }
 
-        if (!SlaveSystem.isSlave) SlaveSystem.startAllSlaves();
+        if (!SlaveSystem.isSlave) {
+            // Override intervals
+            ArrayList<String> upSlaves = new ArrayList<>();
+            ArrayList<String> downSlaves = new ArrayList<>();
+            for (String slave : SlaveSystem.slavesLayerDict.keySet()) {
+                if (SlaveSystem.slavesLayerDict.get(slave)) {
+                    upSlaves.add(slave);
+                } else {
+                    downSlaves.add(slave);
+                }
+            }
+            SlaveSystem.generateIntervals(upSlaves);
+            if (!downSlaves.isEmpty()) {
+                info("Fetch Map Item");
+                SlaveSystem.generateIntervals(downSlaves);
+            }
+
+            SlaveSystem.startAllSlaves();
+        }
         if (availableSlots.isEmpty()) setupSlots();
         MapAreaCache.reset(lowerMapCorner);
         calculateBuildingPath(true, true);
@@ -1611,6 +1631,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     }
 
     public void setInterval(Pair<Integer, Integer> interval) {
+        info("set interval to " + interval.getLeft() + " " + interval.getRight());
         workingInterval = interval;
         trueInterval = interval;
     }
@@ -1638,42 +1659,11 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         return activationReset.get();
     }
 
-    public void skipBuilding() {
-        // ToDo
-/*        if (availableSlots.isEmpty()) setupSlots();
-        knownErrors.clear();
-        checkpoints.clear();
-        if (SlaveSystem.isSlave) {
-            checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
-            state = State.Walking;
-        } else {
-            try {
-                if (moveToFinishedFolder.get())
-                    mapFile.renameTo(new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName()));
-            } catch (Exception e) {
-                warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
-                e.printStackTrace();
-            }
-            state = State.AwaitMasterAllBuiltSkip;
-        }*/
-    }
+    public void skipBuilding() {}
 
-    public void slaveFinished(String slave) {
-        // ToDo
-/*        if (minedLines < map.length) {
-            SlaveSystem.sendToSlave(slave, "mine:" + minedLines);
-            advanceMinedLines();
-            SlaveSystem.activeSlavesDict.put(slave, true);
-            SlaveSystem.finishedSlavesDict.put(slave, false);
-        }*/
-    }
+    public void slaveFinished(String slave) {}
 
-    public void mineLine(int lines) {
-        // ToDo
-/*        minedLines = lines;
-        calculateMiningPath();
-        state = State.Walking;*/
-    }
+    public void mineLine(int lines) {}
 
     private void updateTcpAddress() {
         if (mc == null || mc.world == null || !isActive()) return;
@@ -1830,7 +1820,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     }
 
     private void generateSuppressionLayers(NbtList blockList, HashMap<Integer, Pair<Block, Integer>> blockPaletteDict) {
-        info("Generating suppression layers...");
         // Get the highest block of each column
         Pair<Block, Integer>[][] absoluteHeightMap = new Pair[128][129];
         for (int i = 0; i < blockList.size(); i++) {

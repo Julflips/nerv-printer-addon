@@ -540,6 +540,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     @Override
     public void onDeactivate() {
+        LocalTcpTransport.close();
         Utils.setForwardPressed(false);
         Utils.setBackwardPressed(false);
         Utils.setJumpPressed(false);

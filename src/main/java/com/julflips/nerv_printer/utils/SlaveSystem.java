@@ -1,6 +1,7 @@
 package com.julflips.nerv_printer.utils;
 
 import com.julflips.nerv_printer.interfaces.MapPrinter;
+import com.julflips.nerv_printer.modules.SuppressionPrinter;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import net.minecraft.util.Pair;
 import net.minecraft.util.math.BlockPos;
@@ -14,16 +15,20 @@ public final class SlaveSystem {
     public static ArrayList<String> slaves = new ArrayList<>();
     public static HashMap<String, Boolean> activeSlavesDict = new HashMap<>();
     public static HashMap<String, Boolean> finishedSlavesDict = new HashMap<>();
+    public static HashMap<String, Boolean> slavesLayerDict = new HashMap<>();  //True if on upper layer
     public static SlaveTableController tableController = null;
 
     private static MapPrinter printerModule = null;
+    private static boolean sendToUpper = true;
 
     public static void setupSlaveSystem(MapPrinter module, String ip, int port) {
         printerModule = module;
         slaves.clear();
         activeSlavesDict.clear();
         finishedSlavesDict.clear();
+        slavesLayerDict.clear();
         isSlave = LocalTcpTransport.initialize(ip, port);
+        sendToUpper = true;
     }
 
     public static void setTcpAddress(String ip, int port) {
@@ -82,8 +87,8 @@ public final class SlaveSystem {
         if (printerModule != null) printerModule.skipBuilding();
     }
 
-    public static void generateIntervals() {
-        int sectionSize = (int) Math.ceil((float) 128 / (float) (slaves.size() + 1));
+    public static void generateIntervals(ArrayList<String> slaveList) {
+        int sectionSize = (int) Math.ceil((float) 128 / (float) (slaveList.size() + 1));
         ArrayList<Pair<Integer, Integer>> intervals = new ArrayList<>();
         for (int end = 127; end >= 0; end -= sectionSize) {
             int start = Math.max(0, end - sectionSize + 1);
@@ -95,7 +100,7 @@ public final class SlaveSystem {
             printerModule.setInterval(intervals.remove((intervals.size() - 1) / 2));
         }
 
-        ArrayList<String> sortedSlaves = new ArrayList<>(slaves);
+        ArrayList<String> sortedSlaves = new ArrayList<>(slaveList);
         Collections.sort(sortedSlaves, String.CASE_INSENSITIVE_ORDER);
 
         for (int i = 0; i < intervals.size() && i < sortedSlaves.size(); i++) {
@@ -108,8 +113,9 @@ public final class SlaveSystem {
         slaves.remove(slave);
         activeSlavesDict.remove(slave);
         finishedSlavesDict.remove(slave);
+        slavesLayerDict.remove(slave);
         LocalTcpTransport.sendToAllSlaves("remove");
-        generateIntervals();
+        generateIntervals(slaves);
     }
 
     public static void handleIncomingTcpMessage(String sender, String rawMessage) {
@@ -124,6 +130,9 @@ public final class SlaveSystem {
             if (printerModule == null) return;
             switch (command) {
                 case "layer":
+                    boolean upper = Boolean.parseBoolean(colonSplit[1]);
+                    printerModule.setLayer(upper);
+                    ChatUtils.info("§a Move this bot to the " + (upper ? "upper": "lower") +" layer before starting");
                     break;
                 case "interval":
                     if (colonSplit.length >= 3) {
@@ -160,8 +169,13 @@ public final class SlaveSystem {
                     slaves.add(sender);
                     finishedSlavesDict.put(sender, false);
                     activeSlavesDict.put(sender, false);
+                    if (printerModule instanceof SuppressionPrinter) {
+                        slavesLayerDict.put(sender, sendToUpper);
+                        sendToSlave(sender, "layer:" + sendToUpper);
+                        sendToUpper = !sendToUpper;
+                    }
                     ChatUtils.info("Registered slave: " + sender + " Total slaves: " + slaves.size());
-                    generateIntervals();
+                    generateIntervals(slaves);
                     if (tableController != null) tableController.rebuild();
                 }
                 break;

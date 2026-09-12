@@ -494,6 +494,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
     @Override
     public void onDeactivate() {
+        LocalTcpTransport.close();
         Utils.setForwardPressed(false);
     }
 
