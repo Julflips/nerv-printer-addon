@@ -1502,14 +1502,13 @@ public class CarpetPrinter extends Module implements MapPrinter {
         return activationReset.get();
     }
 
-    public void skipBuilding() {
-    }
+    public void setLayer(boolean isUpper) {}
 
-    public void mineLine(int lines) {
-    }
+    public void skipBuilding() {}
 
-    public void slaveFinished(String slave) {
-    }
+    public void mineLine(int lines) {}
+
+    public void slaveFinished(String slave) {}
 
     private void updateTcpAddress() {
         if (mc == null || mc.world == null || !isActive()) return;

@@ -115,6 +115,7 @@ public final class SlaveSystem {
     public static void handleIncomingTcpMessage(String sender, String rawMessage) {
         // If no sender is specified, the message is from master
         if (rawMessage == null || rawMessage.isBlank()) return;
+        ChatUtils.info(rawMessage);
         String[] colonSplit = rawMessage.replace(" ", "").split(":");
         String command = colonSplit[0];
 
@@ -122,6 +123,8 @@ public final class SlaveSystem {
         if (sender == null) {
             if (printerModule == null) return;
             switch (command) {
+                case "layer":
+                    break;
                 case "interval":
                     if (colonSplit.length >= 3) {
                         Pair<Integer, Integer> interval = new Pair<>(Integer.valueOf(colonSplit[1]), Integer.valueOf(colonSplit[2]));

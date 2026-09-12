@@ -1814,6 +1814,8 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
     }
 
+    public void setLayer(boolean isUpper) {}
+
     // Path Change Check
 
     private void warnPathChanged() {

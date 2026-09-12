@@ -5,6 +5,8 @@ import net.minecraft.util.math.BlockPos;
 
 public interface MapPrinter {
 
+    void setLayer(boolean isUpper);
+
     void setInterval(Pair<Integer, Integer> interval);
 
     void mineLine(int minedLines);
