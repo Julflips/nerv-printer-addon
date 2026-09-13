@@ -945,7 +945,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 if (SlaveSystem.isSlave) {
                     Utils.setBackwardPressed(false);
                     state = State.AwaitSlaveMineLine;
-                    SlaveSystem.sendMessage("finished");
+                    SlaveSystem.sendMessageToMaster("finished");
                     return;
                 } else {
                     if (minedLines < map.length) {
@@ -1053,7 +1053,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                         }
                         if (SlaveSystem.isSlave) {
                             // Obfuscate error pas as relative pos
-                            SlaveSystem.sendMessage("error:" + relativePos.getX() + ":" + relativePos.getZ());
+                            SlaveSystem.sendMessageToMaster("error:" + relativePos.getX() + ":" + relativePos.getZ());
                         }
                     }
                     knownErrors.addAll(newErrors);
@@ -1307,7 +1307,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
             if (SlaveSystem.isSlave && checkpoints.isEmpty()) {
                 // Finish building as slave
                 state = State.AwaitSlaveMineLine;
-                SlaveSystem.sendMessage("finished");
+                SlaveSystem.sendMessageToMaster("finished");
                 return;
             }
         }

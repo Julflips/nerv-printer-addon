@@ -155,6 +155,11 @@ public final class Utils {
         Input.setKeyState(mc.options.jumpKey, pressed);
     }
 
+    public static void setSneakPressed(boolean pressed) {
+        mc.options.sneakKey.setPressed(pressed);
+        Input.setKeyState(mc.options.sneakKey, pressed);
+    }
+
     public static int findHighestFreeSlot(InventoryS2CPacket packet) {
         for (int i = packet.contents().size() - 1; i > packet.contents().size() - 1 - 36; i--) {
             ItemStack stack = packet.contents().get(i);

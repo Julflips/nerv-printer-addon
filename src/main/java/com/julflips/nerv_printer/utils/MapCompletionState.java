@@ -9,12 +9,9 @@ public final class MapCompletionState {
     private static boolean[] lowerLayer;
     private static boolean[] upperLayer;
 
-    public static synchronized void initializeLayers(int size) {
-        if (size <= 0) {
-            throw new IllegalArgumentException("Layer size must be greater than 0.");
-        }
-        upperLayer = new boolean[size];
-        lowerLayer = new boolean[size];
+    public static synchronized void initializeLayers() {
+        upperLayer = new boolean[128];
+        lowerLayer = new boolean[128];
     }
 
     public static synchronized void setInterval(int startInclusive, int endInclusive, boolean value) {

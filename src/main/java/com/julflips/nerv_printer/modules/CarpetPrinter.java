@@ -981,7 +981,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     }
                 }
                 if (SlaveSystem.isSlave) {
-                    SlaveSystem.sendMessage("finished");
+                    SlaveSystem.sendMessageToMaster("finished");
                     state = State.AwaitSlaveNextMap;
                     Utils.setForwardPressed(false);
                     return;

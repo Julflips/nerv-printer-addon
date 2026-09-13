@@ -17,6 +17,7 @@ public final class SlaveSystem {
     public static HashMap<String, Boolean> finishedSlavesDict = new HashMap<>();
     public static HashMap<String, Boolean> slavesLayerDict = new HashMap<>();  //True if on upper layer
     public static SlaveTableController tableController = null;
+    public static MapCompletionState mapCompletionState = new MapCompletionState();
 
     private static MapPrinter printerModule = null;
     private static boolean sendToUpper = true;
@@ -29,14 +30,15 @@ public final class SlaveSystem {
         slavesLayerDict.clear();
         isSlave = LocalTcpTransport.initialize(ip, port);
         sendToUpper = true;
+        mapCompletionState.initializeLayers();
     }
 
     public static void setTcpAddress(String ip, int port) {
         isSlave = LocalTcpTransport.initialize(ip, port);
     }
 
-    public static void sendMessage(String message) {
-        LocalTcpTransport.sendToMaster(message);
+    public static void sendMessageToMaster(String message) {
+        if (isSlave) LocalTcpTransport.sendToMaster(message);
     }
 
     public static boolean allSlavesFinished() {
@@ -184,6 +186,13 @@ public final class SlaveSystem {
                 activeSlavesDict.put(sender, false);
                 printerModule.slaveFinished(sender);
                 if (tableController != null) tableController.rebuild();
+                break;
+            case "placeStatus":
+                SlaveSystem.mapCompletionState.setInterval(
+                    Integer.parseInt(colonSplit[1]),
+                    Integer.parseInt(colonSplit[2]),
+                    Boolean.parseBoolean(colonSplit[3]),
+                    Boolean.parseBoolean(colonSplit[4]));
                 break;
             case "error":
                 if (colonSplit.length >= 3) {
