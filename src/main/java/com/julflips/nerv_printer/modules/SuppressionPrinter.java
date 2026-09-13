@@ -15,7 +15,6 @@ import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.player.Rotations;
@@ -43,7 +42,6 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.Pair;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import org.apache.commons.lang3.tuple.Triple;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
@@ -137,9 +135,9 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         .build()
     );
 
-    private final Setting<Boolean> airPlace = sgGeneral.add(new BoolSetting.Builder()
-        .name("air-place")
-        .description("Place blocks without support.")
+    private final Setting<Boolean> supportBlocks = sgGeneral.add(new BoolSetting.Builder()
+        .name("support-blocks")
+        .description("Place blocks with support. Can be disabled if there is a 2 block heigh ceiling or airplace allowed.")
         .defaultValue(false)
         .build()
     );
@@ -422,8 +420,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     File mapFile;
     BlockPos lowerMapCorner;
     BlockPos upperMapCorner;
-    Block[][][] mapLayer1;                                          // Map pre-suppression
-    Block[][][] mapLayer2;                                          // Map post-suppression
+    Block[][][] lowerMapLayer;
+    Block[][][] upperMapLayer;
 
     public SuppressionPrinter() {
         super(Addon.CATEGORY, "suppression-printer", "Uses inplace suppression to build fullblock staircased maps.");
@@ -463,8 +461,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         minedLines = 128;
         oldState = null;
         debugPreviousState = null;
-        mapLayer1 = new Block[128][129][2];
-        mapLayer2 = new Block[128][129][2];
+        lowerMapLayer = new Block[128][129][2];
+        upperMapLayer = new Block[128][129][2];
 
         setInterval(new Pair<>(0, 127));
         // Initialize Slave System settings
@@ -685,18 +683,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 Utils.getOneItem(mapSlot, false, availableSlots, availableHotBarSlots, packet);
                 Utils.getOneItem(paneSlot, true, availableSlots, availableHotBarSlots, packet);
                 mc.player.getInventory().setSelectedSlot(availableHotBarSlots.get(0));
-
-                /*
-                BlockPos centerBlockPos = mapCorner.add(map.length / 2 - 1, map[map.length / 2 - 1][map[0].length / 2 - 1].getRight(), map[0].length / 2 - 1);
-                Vec3d center = centerBlockPos.toCenterPos().add(0, 0.5, 0);
-                Vec3d centerEdge = mapCorner.add(map.length / 2 - 1, 0, -1).toCenterPos().add(0, 0.5, 0);
-                checkpoints.add(new Pair(centerEdge, new Pair("walkRestock", null)));
-                checkpoints.add(new Pair(center, new Pair("fillMap", null)));
-                checkpoints.add(new Pair(centerEdge, new Pair("walkRestock", null)));
-                checkpoints.add(new Pair(cartographyTable.getRight(), new Pair<>("cartographyTable", null)));
                 state = State.Walking;
-                */
-                ChatUtils.info("ToDo: Map Locking");
                 break;
             case AwaitCartographyResponse:
                 interactTimeout = 0;
@@ -933,6 +920,9 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 case "fillMap":
                     mc.getNetworkHandler().sendPacket(new PlayerInteractItemC2SPacket(Hand.MAIN_HAND, Utils.getNextInteractID(), mc.player.getYaw(), mc.player.getPitch()));
                     return;
+                case "awaitSuppression":
+                    state = State.AwaitSuppressionReady;
+                    return;
                 case "cartographyTable":
                     state = State.AwaitCartographyResponse;
                     interactWithBlock(cartographyTable.getLeft());
@@ -1084,11 +1074,11 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
         // Calculate total uses per tool
         HashMap<ItemStack, Integer> toolUseDict = new HashMap<>();
-        for (int x = 0; x < mapLayer1.length; x++) {
-            for (int z = 0; z <  mapLayer1[0].length; z++) {
-                for (int y = 0; y <  mapLayer1[0][0].length; y++) {
-                    Block currentBlock = mapLayer1[x][z][y];
-                    Block nextBlock = mapLayer2[x][z][y];
+        for (int x = 0; x < upperMapLayer.length; x++) {
+            for (int z = 0; z <  upperMapLayer[0].length; z++) {
+                for (int y = 0; y <  upperMapLayer[0][0].length; y++) {
+                    Block currentBlock = upperMapLayer[x][z][y];
+                    Block nextBlock = lowerMapLayer[x][z][y];
                     if (currentBlock.equals(nextBlock)) continue;
 
                     ItemStack bestTool = ToolUtils.getBestTool(toolSet, currentBlock.getDefaultState());
@@ -1112,7 +1102,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 }
             }
             int rawUses = toolUseDict.get(itemStack);
-            float slaveModifier = (float) (trueInterval.getRight() - trueInterval.getLeft() + 1) / (float) mapLayer1.length;
+            float slaveModifier = (float) (trueInterval.getRight() - trueInterval.getLeft() + 1) / (float) upperMapLayer.length;
             double adjustedUses = (float) rawUses / (float) (unbreakingLevel + 1) * durabilityBuffer.get() * slaveModifier;
             int itemsNeeded = (int) Math.ceil(adjustedUses / (float) itemStack.getMaxDamage());
             info("Restocking §a" + itemsNeeded + " " + itemStack.getItem().getName().getString() + " (" + rawUses + " uses)");
@@ -1232,12 +1222,12 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         // ToDo: Add mining and suppression steps
         boolean flippedZ = false;
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
-            for (int z = 0; z < mapLayer1[0].length; z++) {
+            for (int z = 0; z < upperMapLayer[0].length; z++) {
                 for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
                     int adjustedX = x + lineBonus;
                     if (!Utils.isInInterval(workingInterval, adjustedX)) break;
-                    for (int y = 0; y < mapLayer1[0][0].length; y++) {
-                        int adjustedZ = flippedZ ? mapLayer1[0].length-1-z : z;
+                    for (int y = 0; y < upperMapLayer[0][0].length; y++) {
+                        int adjustedZ = flippedZ ? upperMapLayer[0].length-1-z : z;
                         BlockPos blockPos = lowerMapCorner.add(adjustedX, y, adjustedZ);
                         BlockState blockState = MapAreaCache.getCachedBlockState(blockPos);
                         if (blockState.isAir() && getActiveMap()[adjustedX][adjustedZ][y] != null
@@ -1254,7 +1244,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     // Path and Building Management
 
-    private void calculateBuildingPath(boolean startNorthSide, boolean sprintFirst) {
+    private void generateBuildingPath(boolean startNorthSide, boolean sprintFirst) {
         //Iterate over map and skip completed lines. Player has to be able to see the complete map area
         //Fills checkpoints list
         boolean northToSouth = startNorthSide;
@@ -1265,8 +1255,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
                 int adjustedX = x + lineBonus;
                 if (!Utils.isInInterval(workingInterval, adjustedX)) break;
-                for (int z = 0; z < mapLayer1[0].length; z++) {
-                    for (int y = 0; y < mapLayer1[0][0].length; y++) {
+                for (int z = 0; z < upperMapLayer[0].length; z++) {
+                    for (int y = 0; y < upperMapLayer[0][0].length; y++) {
                         BlockState blockState = MapAreaCache.getCachedBlockState(lowerMapCorner.add(adjustedX, y, z));
                         if (blockState.isAir() && getActiveMap()[adjustedX][z][y] != null) {
                             //If there is a replaceable block and not an ignored block type at the position. Mark the line as not done
@@ -1279,7 +1269,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             if (lineFinished) continue;
 
             Vec3d cp1 = lowerMapCorner.toCenterPos().add(x + linesPerRun.get(), 0, -0.3f);
-            Vec3d cp2 = lowerMapCorner.toCenterPos().add(x + linesPerRun.get(), 0, mapLayer1[0].length - 0.7f);
+            Vec3d cp2 = lowerMapCorner.toCenterPos().add(x + linesPerRun.get(), 0, upperMapLayer[0].length - 0.7f);
             if (northToSouth) {
                 Pair<Vec3d, Pair<String, BlockPos>> newCP1 = new Pair(cp1, new Pair("lineBegin", null));
                 if (!generatedFirstLine) {
@@ -1300,6 +1290,27 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             //Make player sprint to the start of the map
             Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
             checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
+        }
+    }
+
+    private void generateSuppressionPath() {
+        int xOffset = mc.player.getBlockX() - lowerMapCorner.getX();
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset,-3.5,89), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset+1,-3.5,89), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset+1,-3.5,65), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset,-3.5,65), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset+1,-3.5,65), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset+1,-3.5,41), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset,-3.5,41), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset+1,-3.5,41), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset+1,-3.5,15), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset,-3.5,15), new Pair("sprint", null)));
+        if (xOffset <= lowerMapCorner.getX() + 126) {
+            // Go to next suppression line
+            checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset + 2,-3.5,15), new Pair("awaitSuppression", null)));
+        } else {
+            // Lock finished map
+            info("Lock finished Map");
         }
     }
 
@@ -1361,6 +1372,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             warning("Filler-block setting must be set!");
             return;
         }
+        if (availableSlots.isEmpty()) setupSlots();
+        MapAreaCache.reset(lowerMapCorner);
 
         if (!SlaveSystem.isSlave) {
             // Override intervals
@@ -1373,19 +1386,27 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     downSlaves.add(slave);
                 }
             }
+            info("upslaves: " + upSlaves.size());
+            info("downslaves: " + downSlaves.size());
             SlaveSystem.generateIntervals(upSlaves);
             if (!downSlaves.isEmpty()) {
                 info("Fetch Map Item");
                 SlaveSystem.generateIntervals(downSlaves);
+                workingInterval = new Pair<>(0, -1);
+                Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
+                checkpoints.add(new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-0.5,-2), new Pair("sprint", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,1), new Pair("sprint", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,1), new Pair("fillMap", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,128), new Pair("sprint", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(127,-3.5,113), new Pair("awaitSuppression", null)));
+            } else {
+                generateBuildingPath(true, true);
             }
-
+            checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
+            state = State.Walking;
             SlaveSystem.startAllSlaves();
         }
-        if (availableSlots.isEmpty()) setupSlots();
-        MapAreaCache.reset(lowerMapCorner);
-        calculateBuildingPath(true, true);
-        checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
-        state = State.Walking;
     }
 
     private boolean endBuilding() {
@@ -1462,13 +1483,13 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     public ArrayList<BlockPos> getInvalidPlacements() {
         ArrayList<BlockPos> invalidPlacements = new ArrayList<>();
         for (int x = workingInterval.getRight(); x >= workingInterval.getLeft(); x--) {
-            for (int z = mapLayer1[0].length - 1; z >= 0; z--) {
-                for (int y = 0; y < mapLayer1[0].length; y++) {
+            for (int z = upperMapLayer[0].length - 1; z >= 0; z--) {
+                for (int y = 0; y < upperMapLayer[0].length; y++) {
                     BlockPos absolutePos = lowerMapCorner.add(x, y, z);
                     BlockState blockState = MapAreaCache.getCachedBlockState(absolutePos);
                     Block block = blockState.getBlock();
                     if (!blockState.isAir()) {
-                        if (mapLayer1[x][z][y] != block) invalidPlacements.add(absolutePos);
+                        if (upperMapLayer[x][z][y] != block) invalidPlacements.add(absolutePos);
                     }
                 }
             }
@@ -1477,7 +1498,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     }
 
     private Block[][][] getActiveMap() {
-        return workOnUpper ? mapLayer2 : mapLayer1;
+        return workOnUpper ? upperMapLayer : lowerMapLayer;
     }
 
     // Inventory Management
@@ -1866,38 +1887,32 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             }
         }
 
-        mapLayer1 = new Block[128][129][2];
-        mapLayer2 = new Block[128][129][2];
-        boolean suppressed = false;
+        lowerMapLayer = new Block[128][129][2];
+        upperMapLayer = new Block[128][129][2];
+        boolean suppressed = true;
         for (int x = 0; x < heightDiffArray.length; x++) {
             int z = heightDiffArray[x].length-1;
             if (suppressed) {
                 HeightDiff currentDiff = heightDiffArray[x][z];
                 switch (currentDiff) {
                     case Up -> {
-                        mapLayer1[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
-                        mapLayer1[x][z][0] = absoluteHeightMap[x][z].getLeft();
-                        mapLayer1[x][z][1] = fillerBlock.get();
-                        mapLayer2[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
-                        mapLayer2[x][z][0] = absoluteHeightMap[x][z].getLeft();
+                        upperMapLayer[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
+                        upperMapLayer[x][z][1] = fillerBlock.get();
+                        if (supportBlocks.get()) upperMapLayer[x][z][0] = fillerBlock.get();
                     }
                     case Even -> {
-                        mapLayer1[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
-                        mapLayer2[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
+                        lowerMapLayer[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
                     }
                     case Down -> {
-                        mapLayer1[x][z+1][0] = fillerBlock.get();
-                        mapLayer1[x][z+1][1] = absoluteHeightMap[x][z+1].getLeft();
-                        mapLayer2[x][z+1][0] = fillerBlock.get();
-                        mapLayer2[x][z+1][1] = absoluteHeightMap[x][z+1].getLeft();
+                        lowerMapLayer[x][z+1][1] = absoluteHeightMap[x][z+1].getLeft();
+                        if (supportBlocks.get()) lowerMapLayer[x][z+1][0] = fillerBlock.get();
                     }
                 }
                 z = z - 1;
             }
             suppressed = !suppressed;
             while (z >= 0) {
-                mapLayer1[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
-                mapLayer2[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
+                lowerMapLayer[x][z+1][0] = absoluteHeightMap[x][z+1].getLeft();
                 HeightDiff currentDiff = heightDiffArray[x][z];
                 // Default values for north most row
                 HeightDiff nextDiff = HeightDiff.Down;
@@ -1911,55 +1926,55 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     case Up -> {
                         switch (nextDiff) {
                             case Up -> {
-                                mapLayer1[x][z][0] = nextMaterial;
-                                mapLayer1[x][z-1][1] = fillerBlock.get();
-                                mapLayer2[x][z][0] = nextMaterial;
-                                mapLayer2[x][z][1] = nextMaterial;
+                                lowerMapLayer[x][z][1] = fillerBlock.get();
+                                upperMapLayer[x][z][0] = nextMaterial;
+                                upperMapLayer[x][z-1][1] = fillerBlock.get();
+                                if (supportBlocks.get()) {
+                                    lowerMapLayer[x][z][0] = fillerBlock.get();
+                                    upperMapLayer[x][z-1][0] = fillerBlock.get();
+                                }
                             }
                             case Even -> {
-                                mapLayer1[x][z][0] = nextMaterial;
-                                mapLayer2[x][z][0] = nextMaterial;
-                                mapLayer2[x][z][1] = fillerBlock.get();
+                                lowerMapLayer[x][z][1] = fillerBlock.get();
+                                upperMapLayer[x][z][0] = nextMaterial;
+                                upperMapLayer[x][z-1][0] = fillerBlock.get();
+                                if (supportBlocks.get()) lowerMapLayer[x][z][0] = fillerBlock.get();
                             }
                             case Down -> {
-                                if (!airPlace.get()) {
-                                    mapLayer1[x][z][0] = fillerBlock.get();
-                                    mapLayer2[x][z][0] = fillerBlock.get();
-                                }
-                                mapLayer1[x][z][1] = nextMaterial;
-                                mapLayer2[x][z][1] = nextMaterial;
+                                lowerMapLayer[x][z][1] = nextMaterial;
+                                if (supportBlocks.get()) lowerMapLayer[x][z][0] = fillerBlock.get();
                             }
                         }
                     }
                     case Even -> {
                         switch (nextDiff) {
                             case Up -> {
-                                mapLayer1[x][z][0] = nextMaterial;
-                                mapLayer1[x][z-1][1] = fillerBlock.get();
-                                mapLayer2[x][z][0] = nextMaterial;
+                                lowerMapLayer[x][z][0] = fillerBlock.get();
+                                upperMapLayer[x][z][0] = nextMaterial;
+                                upperMapLayer[x][z-1][1] = fillerBlock.get();
+                                if (supportBlocks.get()) upperMapLayer[x][z-1][0] = fillerBlock.get();
                             }
                             case Even -> {
-                                mapLayer1[x][z][0] = nextMaterial;
-                                mapLayer2[x][z][0] = nextMaterial;
+                                lowerMapLayer[x][z][0] = nextMaterial;
                             }
                             case Down -> {
-                                mapLayer1[x][z][0] = fillerBlock.get();
-                                mapLayer1[x][z][1] = nextMaterial;
-                                mapLayer2[x][z][0] = fillerBlock.get();
+                                lowerMapLayer[x][z][0] = fillerBlock.get();
+                                upperMapLayer[x][z][0] = nextMaterial;
                             }
                         }
                     }
                     case Down -> {
                         switch (nextDiff) {
                             case Up -> {
-                                mapLayer2[x][z][0] = nextMaterial;
-                                mapLayer2[x][z-1][1] = fillerBlock.get();
+                                upperMapLayer[x][z][0] = nextMaterial;
+                                upperMapLayer[x][z-1][1] = fillerBlock.get();
+                                if (supportBlocks.get()) upperMapLayer[x][z-1][0] = fillerBlock.get();
                             }
-                            case Even -> mapLayer2[x][z][0] = nextMaterial;
-                            case Down -> {
-                                if (!airPlace.get()) mapLayer1[x][z][0] = fillerBlock.get();
-                                mapLayer1[x][z][1] = nextMaterial;
+                            case Even -> {
+                                upperMapLayer[x][z][0] = nextMaterial;
+                                upperMapLayer[x][z-1][0] = fillerBlock.get();
                             }
+                            case Down -> upperMapLayer[x][z][0] = nextMaterial;
                         }
                     }
                 }
@@ -2027,39 +2042,33 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     @EventHandler
     private void onRender(Render3DEvent event) {
-        if (lowerMapCorner == null || upperMapCorner == null || !render.get()) return;
-
-        event.renderer.box(lowerMapCorner.getX(), lowerMapCorner.getY(), lowerMapCorner.getZ(), lowerMapCorner.getX() + mapLayer1.length, lowerMapCorner.getY(), lowerMapCorner.getZ() + mapLayer1[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
-        event.renderer.box(upperMapCorner.getX(), upperMapCorner.getY(), upperMapCorner.getZ(), upperMapCorner.getX() + mapLayer1.length, upperMapCorner.getY(), upperMapCorner.getZ() + mapLayer1[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
+        if (lowerMapCorner == null || !render.get()) return;
+        event.renderer.box(lowerMapCorner.getX(), lowerMapCorner.getY(), lowerMapCorner.getZ(), lowerMapCorner.getX() + upperMapLayer.length, lowerMapCorner.getY(), lowerMapCorner.getZ() + upperMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
+        if (upperMapCorner == null) return;
+        event.renderer.box(upperMapCorner.getX(), upperMapCorner.getY(), upperMapCorner.getZ(), upperMapCorner.getX() + upperMapLayer.length, upperMapCorner.getY(), upperMapCorner.getZ() + upperMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
 
         if (renderMap.get() && !(state.equals(State.Mining) || state.equals(State.AwaitBlockBreak))) {
-            if (mapLayer1 != null && mapLayer2 != null) {
-                for (int x = 0; x < mapLayer2.length; x++) {
-                    for (int z = 0; z < mapLayer2[x].length; z++) {
-                        for (int y = 0; y < mapLayer2[x][z].length; y++) {
-                            Color color;
-                            Block material = mapLayer2[x][z][y];
+            if (upperMapLayer != null && lowerMapLayer != null) {
+                for (int x = 0; x < lowerMapLayer.length; x++) {
+                    for (int z = 0; z < lowerMapLayer[x].length; z++) {
+                        for (int y = 0; y < lowerMapLayer[x][z].length; y++) {
+                            Block material = lowerMapLayer[x][z][y];
                             if (material != null) {
-                                color = Color.GREEN;
-                                if (material.equals(fillerBlock.get())) {
-                                    color = Color.RED;
-                                }
-                                event.renderer.box(new BlockPos(lowerMapCorner.getX() + x, lowerMapCorner.getY() + y, lowerMapCorner.getZ() + z), color, color, ShapeMode.Lines, 0);
+                                Color renderColor = color.get();
+                                if (material.equals(fillerBlock.get())) renderColor = Color.GREEN;
+                                event.renderer.box(new BlockPos(lowerMapCorner.getX() + x, lowerMapCorner.getY() + y, lowerMapCorner.getZ() + z), renderColor, renderColor, ShapeMode.Lines, 0);
                             }
                         }
                     }
                 }
-                for (int x = 0; x < mapLayer1.length; x++) {
-                    for (int z = 0; z < mapLayer1[x].length; z++) {
-                        for (int y = 0; y < mapLayer1[x][z].length; y++) {
-                            Color color;
-                            Block material = mapLayer1[x][z][y];
+                for (int x = 0; x < upperMapLayer.length; x++) {
+                    for (int z = 0; z < upperMapLayer[x].length; z++) {
+                        for (int y = 0; y < upperMapLayer[x][z].length; y++) {
+                            Block material = upperMapLayer[x][z][y];
                             if (material != null) {
-                                color = Color.BLUE;
-                                if (material.equals(fillerBlock.get())) {
-                                    color = Color.RED;
-                                }
-                                event.renderer.box(new BlockPos(lowerMapCorner.getX() + x, lowerMapCorner.getY() + y, lowerMapCorner.getZ() + z), color, color, ShapeMode.Lines, 0);
+                                Color renderColor = color.get();
+                                if (material.equals(fillerBlock.get())) renderColor = Color.GREEN;
+                                event.renderer.box(new BlockPos(upperMapCorner.getX() + x, upperMapCorner.getY() + y, upperMapCorner.getZ() + z), renderColor, renderColor, ShapeMode.Lines, 0);
                             }
                         }
                     }
@@ -2109,13 +2118,12 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     private void forEachMapBlock(MapBlockAction action) {
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
-            for (int z = 0; z < mapLayer1[0].length; z++) {
+            for (int z = 0; z < upperMapLayer[0].length; z++) {
                 for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
                     int adjustedX = x + lineBonus;
+                    if (!Utils.isInInterval(workingInterval, adjustedX)) break;
 
-                    if (!Utils.isInInterval(workingInterval, x)) break;
-
-                    for (int y = 0; y < mapLayer1[adjustedX][z].length; y++) {
+                    for (int y = 0; y < upperMapLayer[adjustedX][z].length; y++) {
                         Block block = getActiveMap()[adjustedX][z][y];
                         BlockPos pos = lowerMapCorner.add(adjustedX, y, z);
                         BlockState state = MapAreaCache.getCachedBlockState(pos);
@@ -2148,7 +2156,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         AwaitCartographyResponse,
         AwaitNBTFile,
         AwaitBlockBreak,
-        AwaitMasterLinesBuilt,
+        AwaitSuppressionReady,
         AwaitMasterAllCleared,
         AwaitSlaveContinue,
         AwaitSlaveCommand,

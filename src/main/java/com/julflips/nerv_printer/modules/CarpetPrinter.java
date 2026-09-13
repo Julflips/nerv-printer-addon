@@ -871,7 +871,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
             switch (checkpointAction.getLeft()) {
                 case "lineEnd":
                     boolean reachedNorthSide = goal.z == mapCorner.toCenterPos().z;
-                    calculateBuildingPath(reachedNorthSide, false);
+                    generateBuildingPath(reachedNorthSide, false);
                     ArrayList<BlockPos> newErrors = Utils.getInvalidPlacements(mapCorner, workingInterval, map, knownErrors);
                     for (BlockPos errorPos : newErrors) {
                         BlockPos relativePos = errorPos.subtract(mapCorner);
@@ -1192,7 +1192,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
     // Path and Building Management
 
-    private void calculateBuildingPath(boolean startNorthSide, boolean sprintFirst) {
+    private void generateBuildingPath(boolean startNorthSide, boolean sprintFirst) {
         //Iterate over map and skip completed lines. Player has to be able to see the complete map area
         //Fills checkpoints list
         boolean northToSouth = startNorthSide;
@@ -1248,7 +1248,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
         if (!SlaveSystem.isSlave) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         MapAreaCache.reset(mapCorner);
-        calculateBuildingPath(startNorthToSouth.get(), true);
+        generateBuildingPath(startNorthToSouth.get(), true);
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         state = State.Walking;
     }

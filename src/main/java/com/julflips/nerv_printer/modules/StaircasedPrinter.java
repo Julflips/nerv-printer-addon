@@ -850,7 +850,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     endMining();
                 } else {
                     info("Not all lines mined. Redo mining.");
-                    calculateMiningPath();
+                    generateBuildingPath();
                     state = State.Walking;
                     for (String slave : SlaveSystem.slaves) {
                         if (minedLines >= map.length) break;
@@ -952,7 +952,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                         state = State.Walking;
                         if (timeoutTicks == 0) Utils.setForwardPressed(true);
                         Utils.setBackwardPressed(false);
-                        calculateMiningPath();
+                        generateBuildingPath();
                     } else {
                         info("Waiting for slaves to finish mining...");
                         state = State.AwaitMasterAllMined;
@@ -1042,7 +1042,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
             switch (checkpointAction.getLeft()) {
                 case "lineEnd":
-                    calculateBuildingPath(false);
+                    generateBuildingPath(false);
                     ArrayList<BlockPos> newErrors = getInvalidPlacements();
                     for (BlockPos errorPos : newErrors) {
                         BlockPos relativePos = errorPos.subtract(mapCorner);
@@ -1399,7 +1399,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     // Path and Building Management
 
-    private void calculateBuildingPath(boolean sprintFirst) {
+    private void generateBuildingPath(boolean sprintFirst) {
         //Replace checkpoints with path for building (working interval)
         checkpoints.clear();
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x++) {
@@ -1425,7 +1425,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
     }
 
-    private void calculateMiningPath() {
+    private void generateBuildingPath() {
         // Replace checkpoints with path for mining (next single line)
         checkpoints.clear();
         Vec3d cp1 = mapCorner.toCenterPos().add(minedLines, 0.5, -mineLineEndOffset.get());
@@ -1483,7 +1483,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         if (!SlaveSystem.isSlave) SlaveSystem.startAllSlaves();
         if (availableSlots.isEmpty()) setupSlots();
         MapAreaCache.reset(mapCorner);
-        calculateBuildingPath(true);
+        generateBuildingPath(true);
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         if (sleep.get()) {
             if (bed == null) {
@@ -1532,7 +1532,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         info("Start mining map");
         minedLines = -1;
         advanceMinedLines();
-        calculateMiningPath();
+        generateBuildingPath();
         refillMiningInventory();
         state = State.Walking;
         if (sleep.get()) {
@@ -1804,7 +1804,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     public void mineLine(int lines) {
         minedLines = lines;
-        calculateMiningPath();
+        generateBuildingPath();
         state = State.Walking;
     }
 
