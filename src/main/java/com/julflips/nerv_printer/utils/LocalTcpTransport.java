@@ -140,7 +140,7 @@ public final class LocalTcpTransport {
             }, "map-printer-tcp-server");
             acceptThread.setDaemon(true);
             acceptThread.start();
-            ChatUtils.info("§aSuccessfully §astarted §aMaster Server");
+            ChatUtils.info("§aSuccessfully §bstarted §aMaster Server");
         } catch (IOException e) {
             ChatUtils.error("Failed to start master TCP server: " + e.getMessage());
         }

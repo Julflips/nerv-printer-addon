@@ -392,6 +392,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     long lastTickTime;
     boolean closeNextInvPacket;
     boolean workOnUpper;
+    boolean switchedPlacing;
     State state;
     State oldState;
     State debugPreviousState;
@@ -456,6 +457,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         toBeHandledInvPacket = null;
         closeNextInvPacket = false;
         workOnUpper = false;
+        switchedPlacing = false;
         timeoutTicks = 0;
         interactTimeout = 0;
         toBeSwappedSlot = -1;
@@ -912,6 +914,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
             switch (checkpointAction.getLeft()) {
                 case "lineEnd":
+                    boolean reachedNorthSide = goal.z == lowerMapCorner.north().toCenterPos().z;
+                    buildPath(reachedNorthSide, false);
                     if (SlaveSystem.isSlave) {
                         boolean placing = state.equals(State.Walking) ? true : false;
                         int newPlacedLine = Math.min(workingInterval.getRight(), lastPlacedLine + linesPerRun.get());
@@ -950,7 +954,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     state = State.Dumping;
                     Utils.setForwardPressed(false);
                     Pair<Float, Float> throwingAngle = getBestDumpStation().getRight();
-                    mc.player.setYaw(throwingAngle.getRight());
+                    mc.player.setYaw(throwingAngle.getLeft());
                     mc.player.setPitch(throwingAngle.getRight());
                     return;
                 case "refill":
@@ -1006,7 +1010,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         final List<String> allowPlaceActions = Arrays.asList("lineBegin", "lineEnd", "sprint", "miningLineEnd");
         if (!allowPlaceActions.contains(nextAction)) return;
 
-        BlockPos nextBlockPos = getNextBlockPos(state.equals(State.Mining), goal.z >= mc.player.getZ());
+        BlockPos nextBlockPos = getNextPlacementPos(state.equals(State.Mining), goal.z >= mc.player.getZ());
 
         if (miningPos != null || nextBlockPos == null) return;
 
@@ -1248,10 +1252,10 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         checkpoints.add(0, new Pair(pathCheckpoint, new Pair("walkRestock", null)));
     }
 
-    private BlockPos getNextBlockPos(boolean mining, boolean movingSouth) {
+    private BlockPos getNextPlacementPos(boolean mining, boolean movingSouth) {
         // Get next block in working interval to place/mine
         // ToDo: Add mining and suppression steps
-        boolean flippedZ = false;
+        boolean flippedZ = switchedPlacing;
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
             for (int z = 0; z < lowerMapLayer[0].length; z++) {
                 for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
@@ -1279,10 +1283,11 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     // Path and Building Management
 
-    private void buildPath(boolean startNorthSide) {
+    private void buildPath(boolean startNorthSide, boolean requireEntrance) {
         // Iterate over map and skip completed lines. Player has to be able to see the complete map area
         // Fills checkpoints list
         boolean northToSouth = startNorthSide;
+        boolean evenIteration = false;
         boolean isLastLine = false;
         checkpoints.clear();
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
@@ -1290,6 +1295,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             if (!Utils.isInInterval(workingInterval, x+linesPerRun.get()) && northToSouth) {
                 northToSouth = false;
                 isLastLine= true;
+            } else {
+                evenIteration = ! evenIteration;
             }
 
             boolean lineFinished = true;
@@ -1312,7 +1319,11 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             }
             if (lineFinished) continue;
 
-            Vec3d cp1 = getActiveMapCorner().toCenterPos().add(x + linesPerRun.get(), -0.5f, 0);
+            if (evenIteration != northToSouth) {
+                switchedPlacing = true;
+            } else switchedPlacing = false;
+
+            Vec3d cp1 = getActiveMapCorner().toCenterPos().add(x + linesPerRun.get(), -0.5f, -1);
             float cp2Z = isLastLine ? firstPlacedZ + 0.3f : 128 + 0.3f;
             Vec3d cp2 = getActiveMapCorner().toCenterPos().add(x + linesPerRun.get(), -0.5f, cp2Z);
 
@@ -1328,13 +1339,16 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
         if (checkpoints.size() >= 2) {
             // Move last line west by 1 to not walk into blocks placed by others
-            Pair<Vec3d, Pair<String, BlockPos>> lastEnd = checkpoints.removeLast();
-            Pair<Vec3d, Pair<String, BlockPos>> lastBegin = checkpoints.removeLast();
-            checkpoints.add(new Pair(lastBegin.getLeft().add(-1,0,0), new Pair("lastLineBegin", null)));
-            checkpoints.add(new Pair(lastEnd.getLeft().add(-1,0,-1.5f), new Pair("lineEnd", null)));
-            // Entrance to the first line
-            Vec3d firstVec3 = checkpoints.getFirst().getLeft();
-            checkpoints.add(0, new Pair(new Vec3d(firstVec3.x, firstVec3.y, lowerMapCorner.north().getZ()), new Pair("sprint", null)));
+            Vec3d lastEnd = checkpoints.removeLast().getLeft();
+            Vec3d lastBegin = checkpoints.removeLast().getLeft();
+            double maxX = lowerMapCorner.toCenterPos().x + workingInterval.getRight();
+            checkpoints.add(new Pair(new Vec3d(Math.min(lastBegin.x, maxX), lastBegin.y, lastBegin.z), new Pair("lineBegin", null)));
+            checkpoints.add(new Pair(new Vec3d(Math.min(lastEnd.x, maxX), lastEnd.y, lastEnd.z), new Pair("lineEnd", null)));
+            if (requireEntrance) {
+                // Entrance to the first line
+                Vec3d firstVec3 = checkpoints.getFirst().getLeft();
+                checkpoints.add(0, new Pair(new Vec3d(firstVec3.x, firstVec3.y, lowerMapCorner.north().getZ()), new Pair("sprint", null)));
+            }
         }
     }
 
@@ -1478,7 +1492,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
             SlaveSystem.startAllSlaves();
         }
-        buildPath(true);
+        buildPath(true, true);
         checkpoints.add(0, new Pair(getBestDumpStation().getLeft(), new Pair("dump", null)));
         state = State.Walking;
     }
@@ -1870,7 +1884,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     .withHoverEvent(new HoverEvent.ShowText(Text.literal("Open config")))
                     .withUnderline(true));
             info(Text.literal("Successfully loaded config: ").formatted(Formatting.GRAY).append(configText));
-            info("§aInteract with the Start Block to start printing.");
+            info("§aInteract with the §bStart Block §ato start printing.");
             state = State.SelectingChests;
         } catch (IOException e) {
             error("Failed to read config file.");
