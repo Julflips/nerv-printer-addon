@@ -56,6 +56,7 @@ public final class ConfigDeserializer {
         public Pair<BlockPos, Vec3d> bed;
         public ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests;
         public Pair<Vec3d, Pair<Float, Float>> dumpStation;
+        public ArrayList<Pair<Vec3d, Pair<Float, Float>>> dumpStations;
         public BlockPos mapCorner;
         public BlockPos upperMapCorner;
         public HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict;
@@ -98,16 +99,22 @@ public final class ConfigDeserializer {
                 }
             }
 
-            if (root.has("dumpStation")) {
-                JsonObject dump = root.getAsJsonObject("dumpStation");
+            data.dumpStations = new ArrayList<>();
+            if (root.has("dumpStations")) {
+                for (JsonElement e : root.getAsJsonArray("dumpStations")) {
+                    JsonObject dump = e.getAsJsonObject();
 
-                Vec3d pos = jsonToVec3d(dump.getAsJsonObject("pos"));
-                float yaw = dump.get("yaw").getAsFloat();
-                float pitch = dump.get("pitch").getAsFloat();
-
-                data.dumpStation = new Pair<>(pos, new Pair<>(yaw, pitch));
+                    Vec3d pos = jsonToVec3d(dump.getAsJsonObject("pos"));
+                    float yaw = dump.get("yaw").getAsFloat();
+                    float pitch = dump.get("pitch").getAsFloat();
+                    data.dumpStations.add(new Pair<>(pos, new Pair<>(yaw, pitch)));
+                }
             } else {
                 data.dumpStation = null;
+                data.dumpStations = null;
+            }
+            if (!data.dumpStations.isEmpty()) {
+                data.dumpStation = data.dumpStations.get(0);
             }
 
             data.mapCorner = jsonToBlockPos(root.getAsJsonObject("mapCorner"));

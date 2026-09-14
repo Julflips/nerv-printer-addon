@@ -102,7 +102,7 @@ public final class LocalTcpTransport {
             Thread readThread = new Thread(() -> readLoop(socket), "map-printer-tcp-client");
             readThread.setDaemon(true);
             readThread.start();
-            ChatUtils.info("§aSuccessfully connected to master server");
+            ChatUtils.info("§aSuccessfully §bconnected to §aMaster Server");
             return true;
         } catch (IOException ignored) {
             return false;
@@ -140,7 +140,7 @@ public final class LocalTcpTransport {
             }, "map-printer-tcp-server");
             acceptThread.setDaemon(true);
             acceptThread.start();
-            ChatUtils.info("§aSuccessfully started master server");
+            ChatUtils.info("§aSuccessfully §astarted §aMaster Server");
         } catch (IOException e) {
             ChatUtils.error("Failed to start master TCP server: " + e.getMessage());
         }

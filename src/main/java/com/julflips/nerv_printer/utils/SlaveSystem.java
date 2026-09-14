@@ -134,7 +134,7 @@ public final class SlaveSystem {
                 case "layer":
                     boolean upper = Boolean.parseBoolean(colonSplit[1]);
                     printerModule.setLayer(upper);
-                    ChatUtils.info("§a Move this bot to the " + (upper ? "upper": "lower") +" layer before starting");
+                    ChatUtils.info("§a Move this bot to the §b" + (upper ? "upper": "lower") +" §alayer before starting");
                     break;
                 case "interval":
                     if (colonSplit.length >= 3) {

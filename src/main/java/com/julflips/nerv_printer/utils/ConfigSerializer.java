@@ -15,10 +15,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public final class ConfigSerializer {
 
@@ -57,8 +54,8 @@ public final class ConfigSerializer {
         BlockPos mapCorner,
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict
     ) throws IOException {
-        writeToJson(file, type, reset, cartographyTable, finishedMapChest, null, null,
-            mapMaterialChests, dumpStation, mapCorner, null, materialDict, null);
+        writeToJson(file, type, reset, cartographyTable, finishedMapChest, null, null, mapMaterialChests,
+            new ArrayList<>(List.of(dumpStation)), mapCorner, null, materialDict, null);
     }
 
     // Staircased Printer
@@ -75,8 +72,8 @@ public final class ConfigSerializer {
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict,
         Set<ItemStack> toolSet
     ) throws IOException {
-        writeToJson(file, type, null, cartographyTable, finishedMapChest, usedToolChest, bed,
-            mapMaterialChests, dumpStation, mapCorner, null, materialDict, toolSet);
+        writeToJson(file, type, null, cartographyTable, finishedMapChest, usedToolChest, bed, mapMaterialChests,
+            new ArrayList<>(List.of(dumpStation)), mapCorner, null, materialDict, toolSet);
     }
 
     // Suppression Printer
@@ -87,14 +84,14 @@ public final class ConfigSerializer {
         Pair<BlockPos, Vec3d> finishedMapChest,
         Pair<BlockPos, Vec3d> usedToolChest,
         ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests,
-        Pair<Vec3d, Pair<Float, Float>> dumpStation,
+        ArrayList<Pair<Vec3d, Pair<Float, Float>>> dumpStations,
         BlockPos mapCorner,
         BlockPos upperMapCorner,
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict,
         Set<ItemStack> toolSet
     ) throws IOException {
         writeToJson(file, type, null, cartographyTable, finishedMapChest, usedToolChest, null,
-            mapMaterialChests, dumpStation, mapCorner, upperMapCorner, materialDict, toolSet);
+            mapMaterialChests, dumpStations, mapCorner, upperMapCorner, materialDict, toolSet);
     }
 
     public static void writeToJson(
@@ -106,7 +103,7 @@ public final class ConfigSerializer {
         Pair<BlockPos, Vec3d> usedToolChest,
         Pair<BlockPos, Vec3d> bed,
         ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests,
-        Pair<Vec3d, Pair<Float, Float>> dumpStation,
+        ArrayList<Pair<Vec3d, Pair<Float, Float>>> dumpStations,
         BlockPos mapCorner,
         BlockPos upperMapCorner,
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict,
@@ -129,12 +126,16 @@ public final class ConfigSerializer {
             root.add("mapMaterialChests", materialChestsArray);
         }
 
-        if (dumpStation != null) {
-            JsonObject dumpStationObj = new JsonObject();
-            dumpStationObj.add("pos", vec3dToJson(dumpStation.getLeft()));
-            dumpStationObj.addProperty("yaw", dumpStation.getRight().getLeft());
-            dumpStationObj.addProperty("pitch", dumpStation.getRight().getRight());
-            root.add("dumpStation", dumpStationObj);
+        if (dumpStations != null) {
+            JsonArray dumpStationsArray = new JsonArray();
+            for (Pair<Vec3d, Pair<Float, Float>> station : dumpStations) {
+                JsonObject dumpStationObj = new JsonObject();
+                dumpStationObj.add("pos", vec3dToJson(station.getLeft()));
+                dumpStationObj.addProperty("yaw", station.getRight().getLeft());
+                dumpStationObj.addProperty("pitch", station.getRight().getRight());
+                dumpStationsArray.add(dumpStationObj);
+            }
+            root.add("dumpStations", dumpStationsArray);
         }
 
         if (mapCorner != null) root.add("mapCorner", blockPosToJson(mapCorner));
