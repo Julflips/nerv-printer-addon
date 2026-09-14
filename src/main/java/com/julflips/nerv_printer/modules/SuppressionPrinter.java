@@ -727,7 +727,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         break;
                     }
                 }
-                startMining();
+                state = State.Cleanup;
+                Utils.setForwardPressed(false);
                 break;
             case AwaitUsedToolChestResponse:
                 interactTimeout = 0;
@@ -1004,7 +1005,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         final List<String> allowPlaceActions = Arrays.asList("lineBegin", "lineEnd", "sprint", "miningLineEnd");
         if (!allowPlaceActions.contains(nextAction)) return;
 
-        BlockPos nextBlockPos = getNextBlockPos(state.equals(State.Mining));
+        BlockPos nextBlockPos = getNextBlockPos(state.equals(State.Mining), goal.z >= mc.player.getZ());
 
         if (miningPos != null || nextBlockPos == null) return;
 
@@ -1234,7 +1235,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         checkpoints.add(0, new Pair(pathCheckpoint, new Pair("walkRestock", null)));
     }
 
-    private BlockPos getNextBlockPos(boolean mining) {
+    private BlockPos getNextBlockPos(boolean mining, boolean movingSouth) {
         // Get next block in working interval to place/mine
         // ToDo: Add mining and suppression steps
         boolean flippedZ = false;
@@ -1251,7 +1252,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         // On the last line, ignore the x check as the player is walking on the line
                         if (blockState.isAir() && getActiveMapLayer()[adjustedX][adjustedZ][y] != null
                             && (mc.player.getX() > blockPos.toCenterPos().getX() + 0.5f
-                            || mc.player.getBlockX() - getActiveMapCorner().getX() == workingInterval.getRight())) {
+                            || (mc.player.getBlockX() - getActiveMapCorner().getX() == workingInterval.getRight()
+                                && !movingSouth &&  mc.player.getBlockZ() <= blockPos.getZ()))) {
                             return blockPos;
                         }
                     }
@@ -1264,59 +1266,65 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     // Path and Building Management
 
-    private void buildPath(boolean startNorthSide, boolean sprintFirst) {
-        //Iterate over map and skip completed lines. Player has to be able to see the complete map area
-        //Fills checkpoints list
+    private void buildPath(boolean startNorthSide) {
+        // Iterate over map and skip completed lines. Player has to be able to see the complete map area
+        // Fills checkpoints list
         boolean northToSouth = startNorthSide;
-        boolean generatedFirstLine = false;
+        boolean isLastLine = false;
         checkpoints.clear();
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
+            // Last line hast to be south-to-north to not get stuck
+            if (!Utils.isInInterval(workingInterval, x+linesPerRun.get()) && northToSouth) {
+                info("force north to south");
+                northToSouth = false;
+                isLastLine= true;
+            }
+
             boolean lineFinished = true;
+            int firstPlacedZ = 128;
             for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
                 int adjustedX = x + lineBonus;
                 if (!Utils.isInInterval(workingInterval, adjustedX)) break;
                 for (int z = 0; z < upperMapLayer[0].length; z++) {
+                    int adjustedZ = northToSouth ? lowerMapLayer[0].length - z - 1 : z;
                     for (int y = 0; y < upperMapLayer[0][0].length; y++) {
-                        BlockState blockState = MapAreaCache.getCachedBlockState(getActiveMapCorner().add(adjustedX, y, z));
-                        if (blockState.isAir() && getActiveMapLayer()[adjustedX][z][y] != null) {
+                        BlockState blockState = MapAreaCache.getCachedBlockState(getActiveMapCorner().add(adjustedX, y, adjustedZ));
+                        if (blockState.isAir() && getActiveMapLayer()[adjustedX][adjustedZ][y] != null) {
                             //If there is a replaceable block and not an ignored block type at the position. Mark the line as not done
                             lineFinished = false;
                         }
+                        if (!blockState.isAir()) firstPlacedZ = adjustedZ-1;
                     }
-                    if (!lineFinished) break;
+                    if (!lineFinished && firstPlacedZ != 128) break;
                 }
             }
             if (lineFinished) continue;
 
             Vec3d cp1 = getActiveMapCorner().toCenterPos().add(x + linesPerRun.get(), -0.5f, 0);
-            Vec3d cp2 = getActiveMapCorner().toCenterPos().add(x + linesPerRun.get(), -0.5f, upperMapLayer[0].length - 0.7f);
+            float cp2Z = isLastLine ? firstPlacedZ + 0.3f : 128 + 0.3f;
+            Vec3d cp2 = getActiveMapCorner().toCenterPos().add(x + linesPerRun.get(), -0.5f, cp2Z);
+            info("north-to-south: " + northToSouth + " firstPlacedZ: " + firstPlacedZ);
             if (northToSouth) {
-                Pair<Vec3d, Pair<String, BlockPos>> newCP1 = new Pair(cp1, new Pair("lineBegin", null));
-                if (!generatedFirstLine) {
-                    // Move first checkpoint north for direct path. Set sprint since it's not building yet
-                    newCP1.setLeft(newCP1.getLeft().add(0,0,-1));
-                    if (sprintFirst) newCP1.getRight().setLeft("sprint");
-                    generatedFirstLine = true;
-                }
-                checkpoints.add(newCP1);
+                checkpoints.add(new Pair(cp1, new Pair("lineBegin", null)));
                 checkpoints.add(new Pair(cp2, new Pair("lineEnd", null)));
             } else {
                 checkpoints.add(new Pair(cp2, new Pair("lineBegin", null)));
                 checkpoints.add(new Pair(cp1, new Pair("lineEnd", null)));
             }
             northToSouth = !northToSouth;
+            firstPlacedZ = 129;
         }
-        if (checkpoints.size() > 0) {
+
+        if (checkpoints.size() >= 2) {
             // Move last line west by 1 to not walk into blocks placed by others
             Pair<Vec3d, Pair<String, BlockPos>> lastEnd = checkpoints.removeLast();
             Pair<Vec3d, Pair<String, BlockPos>> lastBegin = checkpoints.removeLast();
-            checkpoints.add(new Pair(lastBegin.getLeft().add(-1,0,0), new Pair("lineBegin", null)));
+            info(lastBegin.getLeft() + " " + lastEnd.getLeft());
+            checkpoints.add(new Pair(lastBegin.getLeft().add(-1,0,0), new Pair("lastLineBegin", null)));
             checkpoints.add(new Pair(lastEnd.getLeft().add(-1,0,-1.5f), new Pair("lineEnd", null)));
-            if (sprintFirst) {
-                //Make player sprint to the start of the map
-                Pair<Vec3d, Pair<String, BlockPos>> firstPoint = checkpoints.remove(0);
-                checkpoints.add(0, new Pair(firstPoint.getLeft(), new Pair("sprint", firstPoint.getRight().getRight())));
-            }
+            // Entrance to the first line
+            Vec3d firstVec3 = checkpoints.getFirst().getLeft();
+            checkpoints.add(0, new Pair(new Vec3d(firstVec3.x, firstVec3.y, lowerMapCorner.north().getZ()), new Pair("sprint", null)));
         }
     }
 
@@ -1324,8 +1332,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         workingInterval = new Pair<>(0, -1);
         Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
         checkpoints.add(new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
-        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129.3f,-0.5,-2), new Pair("sprint", null)));
-        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129.3f,-3.5,1), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,1), new Pair("sprint", null)));
         checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,1), new Pair("fillMap", null)));
         checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,114), new Pair("sprint", null)));
         checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(128,-3.5,113), new Pair("awaitSuppression", null)));
@@ -1347,12 +1355,15 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             checkpoints.add(new Pair(entry, new Pair("stopSneak", null)));
         }
 
-        if (mc.player.getBlockX() <= lowerMapCorner.getX() + 254) {
+        if (mc.player.getBlockX() <= lowerMapCorner.getX() + 251) {
             // Go to next suppression line
             checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset + 2,-3.5, suppressionCheckpoints.getLast()), new Pair("awaitSuppression", null)));
         } else {
             // Lock finished map
             info("§aLock finished Map");
+            checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,suppressionCheckpoints.getLast()), new Pair("sprint", null)));
+            checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
+            checkpoints.add(new Pair(cartographyTable.getRight(), new Pair<>("cartographyTable", null)));
         }
     }
 
@@ -1448,7 +1459,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             }
             SlaveSystem.startAllSlaves();
         }
-        buildPath(true, true);
+        buildPath(true);
         checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         state = State.Walking;
     }
@@ -2169,14 +2180,14 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     private void forEachMapBlock(MapBlockAction action) {
         for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
-            for (int z = 0; z < upperMapLayer[0].length; z++) {
+            for (int z = 0; z < lowerMapLayer[0].length; z++) {
                 for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
                     int adjustedX = x + lineBonus;
                     if (!Utils.isInInterval(workingInterval, adjustedX)) break;
 
-                    for (int y = 0; y < upperMapLayer[adjustedX][z].length; y++) {
+                    for (int y = 0; y < lowerMapLayer[adjustedX][z].length; y++) {
                         Block block = getActiveMapLayer()[adjustedX][z][y];
-                        BlockPos pos = lowerMapCorner.add(adjustedX, y, z);
+                        BlockPos pos = getActiveMapCorner().add(adjustedX, y, z);
                         BlockState state = MapAreaCache.getCachedBlockState(pos);
 
                         action.accept(adjustedX, z, y, state, block);
@@ -2213,7 +2224,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         AwaitSlaveCommand,
         Walking,
         Mining,
-        Dumping
+        Dumping,
+        Cleanup
     }
 
     private enum SprintMode {
