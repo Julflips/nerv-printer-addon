@@ -514,7 +514,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 int adjustedZ = Utils.getIntervalStart(hitPos.getZ() + 1);
                 // Move Z down by one to include the north line as players are likely to use it for registration
                 lowerMapCorner = new BlockPos(adjustedX, hitPos.getY(), adjustedZ - 1);
-                MapAreaCache.reset(lowerMapCorner);
+                MapAreaCache.reset(lowerMapCorner, true);
                 state = State.SelectingUpperMapArea;
                 info("LowerMap Area selected. Select the §aUpper Map Area.");
                 return;
@@ -1312,7 +1312,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 checkpoints.add(new Pair(cp1, new Pair("lineEnd", null)));
             }
             northToSouth = !northToSouth;
-            firstPlacedZ = 129;
         }
 
         if (checkpoints.size() >= 2) {
@@ -1426,37 +1425,47 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             return;
         }
         if (availableSlots.isEmpty()) setupSlots();
-        MapAreaCache.reset(lowerMapCorner);
+        MapAreaCache.reset(lowerMapCorner, true);
 
         if (!SlaveSystem.isSlave) {
             // Override intervals
-            ArrayList<String> upSlaves = new ArrayList<>();
-            ArrayList<String> downSlaves = new ArrayList<>();
-            for (String slave : SlaveSystem.slavesLayerDict.keySet()) {
-                if (SlaveSystem.slavesLayerDict.get(slave)) {
-                    upSlaves.add(slave);
-                } else {
-                    downSlaves.add(slave);
-                }
-            }
-            Collections.sort(upSlaves, String.CASE_INSENSITIVE_ORDER);
-            Collections.sort(downSlaves, String.CASE_INSENSITIVE_ORDER);
-            info("upslaves: " + upSlaves);
-            info("downslaves: " + downSlaves);
 
-            if (upSlaves.isEmpty()) {
+            if (SlaveSystem.slaves.isEmpty()) {
                 error("Need at least one slave to work on upper platform!");
                 toggle();
                 return;
             }
-            LocalTcpTransport.sendToSlave(upSlaves.get(0), "interval:" + 0 + ":" + 127);
 
-            if (!downSlaves.isEmpty()) {
-                LocalTcpTransport.sendToSlave(downSlaves.get(0), "interval:" + 4 + ":" + 127);
-                setInterval(new Pair<>(0, 3));
+            if (SlaveSystem.slaves.size() > 4) {
+                warning("Only 2-5 accounts are supported. More will not result in a speed up.");
+                // Remove excess Slaves
+                ArrayList<String> toBeRemoved = new ArrayList<>();
+                for (int i = 5; i < SlaveSystem.slaves.size(); i++) {toBeRemoved.add(SlaveSystem.slaves.get(i));}
+                for (String slave : toBeRemoved) {SlaveSystem.removeSlave(slave);}
+            }
+
+            // Upper Slave placing
+            LocalTcpTransport.sendToSlave(SlaveSystem.slaves.get(0), "interval:" + 0 + ":" + 127);
+
+            // Lower Slave/Master Placing
+            if (SlaveSystem.slaves.size() >= 2) {
+                // Master will place 2 lines
+                int masterIntervalSize = linesPerRun.get() * 2;
+                LocalTcpTransport.sendToSlave(SlaveSystem.slaves.get(1), "interval:" + masterIntervalSize + ":" + 127);
+                setInterval(new Pair<>(0, masterIntervalSize - 1));
             } else {
                 setInterval(new Pair<>(0, 127));
             }
+
+            // Optional mining in parallel to placing
+            for (int i = 3; i <= 4 ; i++) {
+                if (SlaveSystem.slaves.size() >= i) {
+                    String slave = SlaveSystem.slaves.get(i);
+                    LocalTcpTransport.sendToSlave(slave, "interval:" + 0 + ":" + -1);
+                    LocalTcpTransport.sendToSlave(slave, "prepareMining");
+                }
+            }
+
             SlaveSystem.startAllSlaves();
         }
         buildPath(true);
@@ -1841,7 +1850,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             this.dumpStation = data.dumpStation;
             this.lowerMapCorner = data.mapCorner;
             this.upperMapCorner = data.upperMapCorner;
-            MapAreaCache.reset(lowerMapCorner);
+            MapAreaCache.reset(lowerMapCorner, true);
             this.materialDict = data.materialDict;
             this.toolSet = data.toolSet;
             Text configText = Text.literal(configFile.getName())
