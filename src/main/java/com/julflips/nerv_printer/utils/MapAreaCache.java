@@ -17,10 +17,11 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 public final class MapAreaCache {
     private static BlockPos mapCorner = null;
     private static Map<ChunkPos, Chunk> cachedChunks = new HashMap<>();
+    private static boolean includeNorthLine = false;
 
     public static boolean isWithingMap(BlockPos pos) {
         BlockPos relativePos = pos.subtract(mapCorner);
-        return relativePos.getX() >= 0 && relativePos.getX() < 128 && relativePos.getZ() >= 0 && relativePos.getZ() < 128;
+        return relativePos.getX() >= 0 && relativePos.getX() < 128 && relativePos.getZ() >= 0 && relativePos.getZ() < (includeNorthLine ? 129 : 128);
     }
 
     public static boolean isMapAreaClear() {
@@ -33,9 +34,14 @@ public final class MapAreaCache {
         return true;
     }
 
-    public static void reset(BlockPos newCorner) {
+    public static void reset(BlockPos newCorner, boolean northLine) {
         mapCorner = new BlockPos(newCorner);
         cachedChunks.clear();
+        includeNorthLine = northLine;
+    }
+
+    public static void reset(BlockPos newCorner) {
+        reset(newCorner, false);
     }
 
     public static BlockState getCachedBlockState(BlockPos blockPos) {
@@ -56,7 +62,7 @@ public final class MapAreaCache {
     @EventHandler()
     private static void onReceivePacket(PacketEvent.Receive event) {
         if (mapCorner != null && event.packet instanceof UnloadChunkS2CPacket packet) {
-            BlockPos chunkCorner = packet.pos().getStartPos();
+            BlockPos chunkCorner = packet.pos().getStartPos().add(0, 0, 15);
             if (isWithingMap(chunkCorner)) {
                 cachedChunks.put(packet.pos(), mc.world.getChunk(packet.pos().getStartPos()));
             }
