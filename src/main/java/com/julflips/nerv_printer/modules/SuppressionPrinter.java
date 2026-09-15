@@ -1045,8 +1045,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     // Restocking
 
     private Pair<BlockPos, Vec3d> getBestChest(Item item) {
-        Vec3d bestPos = null;
-        BlockPos bestChestPos = null;
         ArrayList<Pair<BlockPos, Vec3d>> list = new ArrayList<>();
         if (item.equals(Items.CARTOGRAPHY_TABLE)) {
             list = mapMaterialChests;
@@ -1057,18 +1055,35 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             toggle();
             return new Pair<>(new BlockPos(0, 0, 0), new Vec3d(0, 0, 0));
         }
-        //Get nearest chest
+        ArrayList<Pair<BlockPos, Vec3d>> bestList = new ArrayList<>();
+        // Get lowest/heighest chest (depending on layer) as 1. criteria
         for (Pair<BlockPos, Vec3d> p : list) {
+            //Skip chests that have already been checked
+            if (checkedChests.contains(p.getLeft())) continue;
+            if (bestList.isEmpty() || ((bestList.getFirst().getLeft().getY() <= p.getLeft().getY()) && workOnUpper)
+                || ((bestList.getFirst().getLeft().getY() >= p.getLeft().getY()) && !workOnUpper)) {
+                // Remove all previous results if new one is truly better
+                if (!bestList.isEmpty() && bestList.getFirst().getLeft().getY() != p.getLeft().getY()) {
+                    bestList.clear();
+                }
+                bestList.add(p);
+            }
+        }
+        if (bestList.isEmpty()) {
+            checkedChests.clear();
+            return getBestChest(item);
+        }
+        // Get nearest chest as 2. criteria
+        Vec3d bestPos = null;
+        BlockPos bestChestPos = null;
+        info("" + bestList);
+        for (Pair<BlockPos, Vec3d> p : bestList) {
             //Skip chests that have already been checked
             if (checkedChests.contains(p.getLeft())) continue;
             if (bestPos == null || PlayerUtils.distanceTo(p.getRight()) < PlayerUtils.distanceTo(bestPos)) {
                 bestPos = p.getRight();
                 bestChestPos = p.getLeft();
             }
-        }
-        if (bestPos == null || bestChestPos == null) {
-            checkedChests.clear();
-            return getBestChest(item);
         }
         return new Pair(bestChestPos, bestPos);
     }
