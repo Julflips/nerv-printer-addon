@@ -65,8 +65,9 @@ public final class SlaveSystem {
     public static void startAllSlaves() {
         for (String slave : activeSlavesDict.keySet()) {
             if (!activeSlavesDict.get(slave)) {
-                LocalTcpTransport.sendToSlave(slave, "start");
+                sendToSlave(slave, "start");
                 activeSlavesDict.put(slave, true);
+                finishedSlavesDict.put(slave, false);
             }
         }
         if (printerModule != null && !printerModule.isActive() && !printerModule.getActivationReset()) {
@@ -76,7 +77,7 @@ public final class SlaveSystem {
 
     public static void pauseAllSlaves() {
         for (String slave : activeSlavesDict.keySet()) {
-            LocalTcpTransport.sendToSlave(slave, "pause");
+            sendToSlave(slave, "pause");
             activeSlavesDict.put(slave, false);
         }
         if (printerModule != null && printerModule.isActive() && !printerModule.getActivationReset()) {
@@ -85,7 +86,7 @@ public final class SlaveSystem {
     }
 
     public static void skipNextBuilding() {
-        LocalTcpTransport.sendToAllSlaves("skip");
+        sendToAllSlaves("skip");
         if (printerModule != null) printerModule.skipBuilding();
     }
 
@@ -107,7 +108,7 @@ public final class SlaveSystem {
 
         for (int i = 0; i < intervals.size() && i < sortedSlaves.size(); i++) {
             String slave = sortedSlaves.get(i);
-            LocalTcpTransport.sendToSlave(slave, "interval:" + intervals.get(i).getLeft() + ":" + intervals.get(i).getRight());
+            sendToSlave(slave, "interval:" + intervals.get(i).getLeft() + ":" + intervals.get(i).getRight());
         }
     }
 
@@ -116,7 +117,7 @@ public final class SlaveSystem {
         activeSlavesDict.remove(slave);
         finishedSlavesDict.remove(slave);
         slavesLayerDict.remove(slave);
-        LocalTcpTransport.sendToAllSlaves("remove");
+        sendToAllSlaves("remove");
         generateIntervals(slaves);
     }
 

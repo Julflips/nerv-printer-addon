@@ -1507,7 +1507,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
     public void skipBuilding() {}
 
-    public void mineLine(int lines) {}
+    public void mineLine(int line) {}
 
     public void slaveFinished(String slave) {}
 

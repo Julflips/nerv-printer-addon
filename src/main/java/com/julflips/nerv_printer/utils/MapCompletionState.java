@@ -1,5 +1,6 @@
 package com.julflips.nerv_printer.utils;
 
+import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import net.minecraft.util.Pair;
 
 import java.util.Arrays;
@@ -14,18 +15,9 @@ public final class MapCompletionState {
         lowerLayer = new boolean[128];
     }
 
-    public static synchronized void setInterval(int startInclusive, int endInclusive, boolean value) {
-        setInterval(startInclusive, endInclusive, value, false);
-    }
-
     public static synchronized void setInterval(int startInclusive, int endInclusive, boolean value, boolean isUpperLayer) {
+        ChatUtils.info("Update MCS: " + startInclusive + " to " + endInclusive + " on " + (isUpperLayer ? "upper" : "lower") + " with value: " + value);
         boolean[] layer = getLayer(isUpperLayer);
-        if (startInclusive > endInclusive) {
-            throw new IllegalArgumentException("startInclusive must be <= endInclusive.");
-        }
-        if (startInclusive < 0 || endInclusive >= layer.length) {
-            throw new IndexOutOfBoundsException("Interval [" + startInclusive + ", " + endInclusive + "] is outside layer bounds 0.." + (layer.length - 1) + ".");
-        }
         Arrays.fill(layer, startInclusive, endInclusive + 1, value);
     }
 
@@ -36,7 +28,7 @@ public final class MapCompletionState {
         return isLayerComplete(lowerLayer, targetValue) && isLayerComplete(upperLayer, targetValue);
     }
 
-    private static boolean isLayerComplete(boolean[] layer, boolean targetValue) {
+    public static boolean isLayerComplete(boolean[] layer, boolean targetValue) {
         for (boolean value : layer) {
             if (value != targetValue) {
                 return false;
@@ -51,5 +43,12 @@ public final class MapCompletionState {
             throw new IllegalStateException((isUpperLayer ? "Upper" : "Lower") + " layer has not been added yet.");
         }
         return layer;
+    }
+
+    public static boolean isLineComplete(boolean isUpperLayer, int line, boolean targetValue) {
+        if (line < 0) return true;
+        // Only for 2 wide lines
+        boolean[] layer = getLayer(isUpperLayer);
+        return layer[line*2] == targetValue && layer[line*2+1] == targetValue;
     }
 }
