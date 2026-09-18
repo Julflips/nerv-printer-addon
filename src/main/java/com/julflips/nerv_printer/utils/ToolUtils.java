@@ -40,4 +40,8 @@ public final class ToolUtils {
         }
         return false;
     }
+
+    public static int getRemainingDamage(ItemStack itemStack) {
+        return itemStack.getMaxDamage() - itemStack.getDamage();
+    }
 }
