@@ -371,7 +371,7 @@ public final class Utils {
     }
 
     public static boolean isInInterval(Pair<Integer, Integer> interval, int number) {
-        return number >= interval.getLeft() && number <= interval.getRight();
+        return number >= interval.getLeft() && number <= interval.getRight() && number >= 0;
     }
 
     @EventHandler
