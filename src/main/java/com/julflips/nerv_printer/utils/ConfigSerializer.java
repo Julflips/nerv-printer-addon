@@ -82,7 +82,6 @@ public final class ConfigSerializer {
         String type,
         Pair<BlockPos, Vec3d> cartographyTable,
         Pair<BlockPos, Vec3d> finishedMapChest,
-        Pair<BlockPos, Vec3d> usedToolChest,
         ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests,
         ArrayList<Pair<Vec3d, Pair<Float, Float>>> dumpStations,
         BlockPos mapCorner,
@@ -90,7 +89,7 @@ public final class ConfigSerializer {
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict,
         Set<ItemStack> toolSet
     ) throws IOException {
-        writeToJson(file, type, null, cartographyTable, finishedMapChest, usedToolChest, null,
+        writeToJson(file, type, null, cartographyTable, finishedMapChest, null, null,
             mapMaterialChests, dumpStations, mapCorner, upperMapCorner, materialDict, toolSet);
     }
 
