@@ -46,7 +46,7 @@ public final class MapCompletionState {
     }
 
     public static boolean isLineComplete(boolean isUpperLayer, int line, boolean targetValue) {
-        if (line < 0) return true;
+        if (line < 0 || line > 63) return true;
         // Only for 2 wide lines
         boolean[] layer = getLayer(isUpperLayer);
         return layer[line*2] == targetValue && layer[line*2+1] == targetValue;
