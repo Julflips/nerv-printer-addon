@@ -440,6 +440,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
     int jumpTimeout;
     int interactTimeout;
     int toBeSwappedSlot;
+    int restockSyncId = -1;                     //syncId of the container the restock backlog belongs to
     int minedLines;
     long lastTickTime;
     boolean closeNextInvPacket;
@@ -511,6 +512,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         jumpTimeout = 0;
         interactTimeout = 0;
         toBeSwappedSlot = -1;
+        restockSyncId = -1;
         minedLines = 128;
         oldState = null;
         debugPreviousState = null;
@@ -728,6 +730,9 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         switch (state) {
             case AwaitRestockResponse:
                 interactTimeout = 0;
+                //Remember which container these slot indices belong to, so we can tell
+                //whether it is still open when the queued clicks are executed in onTick().
+                restockSyncId = packet.syncId();
                 boolean foundMaterials = false;
                 List<Integer> slots = IntStream.rangeClosed(0, packet.contents().size() - 37)
                     .boxed()
@@ -943,6 +948,20 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
         // Restocking
         if (restockBacklogSlots.size() > 0) {
+            //The container can be closed by the player or the server at any time. The queued slot
+            //indices only make sense for that container - clicking them on the player inventory
+            //throws IndexOutOfBoundsException inside the vanilla screen handler and crashes the game.
+            if (mc.currentScreen == null || mc.player.currentScreenHandler.syncId != restockSyncId) {
+                warning("Container was closed while restocking. Walking back to the chest.");
+                restockBacklogSlots.clear();
+                state = State.Walking;
+                if (lastInteractedChest != null) {
+                    checkpoints.add(0, new Pair(lastInteractedChest.toCenterPos(), new Pair<>("refill", lastInteractedChest)));
+                } else {
+                    checkpoints.add(0, new Pair(dumpStation.getLeft(), new Pair<>("dump", null)));
+                }
+                return;
+            }
             int slot = restockBacklogSlots.remove(0);
             mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot, 1, SlotActionType.QUICK_MOVE, mc.player);
             if (restockBacklogSlots.isEmpty()) {
