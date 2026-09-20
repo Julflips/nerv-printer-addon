@@ -238,7 +238,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     private final Setting<Integer> mapLoadTimeout = sgAdvanced.add(new IntSetting.Builder()
         .name("map-load-timeout")
         .description("How many ticks to wait to update the map in hand.")
-        .defaultValue(2)
+        .defaultValue(7)
         .min(0)
         .sliderRange(0, 20)
         .build()
@@ -751,8 +751,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         break;
                     }
                 }
-                state = State.Cleanup;
-                Utils.setForwardPressed(false);
+                // ToDo: Do mining for <4 slaves
+                state = State.AwaitNBTFile;
                 break;
         }
     }
@@ -854,7 +854,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 suppressedLines++;
                 if (suppressedLines > 0) {
                     // Suppress one line
-                    suppressionPath();
+                    suppressPath();
                 } else {
                     // Only continue filling map on first iteration
                     loadFirstLinePath();
@@ -953,10 +953,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     Utils.setSneakPressed(true);
                     break;
                 case "stopSneak":
-                    Utils.setSneakPressed(false);
-                    break;
-                case "loadMap":
                     Utils.setForwardPressed(false);
+                    Utils.setSneakPressed(false);
                     timeoutTicks = mapLoadTimeout.get();
                     return;
                 case "cartographyTable":
@@ -994,7 +992,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     SlaveSystem.sendMessageToMaster("placeStatus:" + workingInterval.getLeft() + ":"
                         + workingInterval.getRight() + ":" + false + ":" + workOnUpper);
                     return;
-                case "miningRestockFinished":
+                case "slaveFinished":
                     state = State.StandBy;
                     Utils.setForwardPressed(false);
                     SlaveSystem.sendMessageToMaster("finished");
@@ -1005,18 +1003,10 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     // Done Building
                     info("Done building");
                     checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("dump", null)));
-                    if (SlaveSystem.isSlave) {
-                        state = State.StandBy;
-                        Utils.setForwardPressed(false);
-                        SlaveSystem.sendMessageToMaster("finished");
-                    } else {
+                    checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("slaveFinished", null)));
+                    if (!SlaveSystem.isSlave) {
                         // Master
-                        workingInterval = new Pair<>(0, -1);
-                        Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
-                        checkpoints.add(new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
-                        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
-                        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,1), new Pair("sprint", null)));
-                        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,1), new Pair("fillMap", null)));
+                        fillMapPath();
                     }
                 }
             }
@@ -1194,7 +1184,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             info("Restocking §a" + itemsNeeded + " " + itemStack.getItem().getName().getString() + " (" + rawUses + " uses)");
             restockList.add(0, Triple.of(itemStack.getItem().asItem(), itemsNeeded, itemsNeeded));
         }
-        checkpoints.add(new Pair<>(getActiveMapCorner().toCenterPos().add(0,-0.5f, -1), new Pair<>("miningRestockFinished", null)));
+        checkpoints.add(new Pair<>(getActiveMapCorner().toCenterPos().add(0,-0.5f, -1), new Pair<>("slaveFinished", null)));
         addClosestRestockCheckpoint();
     }
 
@@ -1425,7 +1415,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         }
     }
 
-    private void miningPath() {
+    private void minePath() {
         checkpoints.clear();
         Vec3d cp1 = getActiveMapCorner().toCenterPos().add(workingInterval.getRight()-0.5f, -0.5f, -1);
         Vec3d cp2 = getActiveMapCorner().toCenterPos().add(workingInterval.getRight()-0.5f, -0.5f, lowerMapLayer[0].length-1);
@@ -1441,13 +1431,24 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         }
     }
 
+    private void fillMapPath() {
+        state = State.Walking;
+        setInterval(new Pair<>(0, -1));
+        checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("dump", null)));
+        Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
+        checkpoints.add(new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,1), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,116), new Pair("fillMap", null)));
+    }
+
     private void loadFirstLinePath() {
-        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,116), new Pair("sprint", null)));
-        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(128,-3.5,113), new Pair("awaitSuppression", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,12), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(128,-3.5,15), new Pair("awaitSuppression", null)));
         state = State.Walking;
     }
 
-    private void suppressionPath() {
+    private void suppressPath() {
         info("suppressionPath with " + suppressedLines);
         state = State.Walking;
         int xOffset = 125 + suppressedLines*2;
@@ -1462,8 +1463,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             for (Integer suppressionCheckpoint : suppressionCheckpoints) {
                 Vec3d entry = lowerMapCorner.toCenterPos().add(xOffset + 1.4f,-3.5,suppressionCheckpoint);
                 checkpoints.add(new Pair(entry, new Pair("startSneak", null)));
-                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset - 0.2f,-3.5, suppressionCheckpoint), new Pair("loadMap", null)));
-                checkpoints.add(new Pair(entry, new Pair("stopSneak", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset - 0.2f,-3.5, suppressionCheckpoint), new Pair("stopSneak", null)));
+                checkpoints.add(new Pair(entry, new Pair("sprint", null)));
             }
             // Go to next suppression line
             checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset + 2,-3.5, suppressionCheckpoints.getLast()), new Pair("awaitSuppression", null)));
@@ -1474,7 +1475,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             mc.player.getInventory().setSelectedSlot(targetSlot);
             suppressedLines = -1;
             // Finished Suppression. Lock the finished map
-            checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,suppressionCheckpoints.getLast()), new Pair("sprint", null)));
+            checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,suppressionCheckpoints.getFirst()), new Pair("sprint", null)));
             checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
             checkpoints.add(new Pair(cartographyTable.getRight(), new Pair<>("cartographyTable", null)));
         }
@@ -1521,23 +1522,11 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 for (String slave : toBeRemoved) {SlaveSystem.removeSlave(slave);}
             }
 
-            // Upper Slave placing
+            // Slave 1: Placing upper layer
             SlaveSystem.sendToSlave(SlaveSystem.slaves.get(0), "interval:" + 0 + ":" + (lowerMapLayer.length-1));
             SlaveSystem.sendToSlave(SlaveSystem.slaves.get(0), "start");
 
-            // Lower Slave/Master Placing
-            if (SlaveSystem.slaves.size() >= 2) {
-                // Master will place 2 lines
-                int masterIntervalSize = linesPerRun.get() * 2;
-                String slave = SlaveSystem.slaves.get(1);
-                SlaveSystem.sendToSlave(slave, "interval:" + masterIntervalSize + ":" + (lowerMapLayer.length-1));
-                SlaveSystem.sendToSlave(slave, "start");
-                setInterval(new Pair<>(0, masterIntervalSize - 1));
-            } else {
-                setInterval(new Pair<>(0, (lowerMapLayer.length-1)));
-            }
-
-            // Optional mining in parallel to placing
+            // Slave 3-4: Optional mining in parallel to placing (3. upper, 4. lower)
             for (int i = 3; i <= 4 ; i++) {
                 if (SlaveSystem.slaves.size() >= i) {
                     // Prepare mining slaves
@@ -1545,6 +1534,24 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     SlaveSystem.sendToSlave(slave, "interval:" + -1 + ":" + -1);
                     SlaveSystem.sendToSlave(slave, "mine:"+ -1);
                 }
+            }
+
+            // Slave 2 + Master: Placing lower layer
+            if (SlaveSystem.slaves.size() >= 2) {
+                // 2-3 slaves -> Master will place half the map
+                // 4+ slaves -> Master does not place anything
+                int masterIntervalSize = SlaveSystem.slaves.size() >= 4 ? 0 : lowerMapLayer.length/2;
+                String slave = SlaveSystem.slaves.get(1);
+                SlaveSystem.sendToSlave(slave, "interval:" + masterIntervalSize + ":" + (lowerMapLayer.length-1));
+                SlaveSystem.sendToSlave(slave, "start");
+                if (masterIntervalSize == 0) {
+                    fillMapPath();
+                    return;
+                } else {
+                    setInterval(new Pair<>(0, masterIntervalSize - 1));
+                }
+            } else {
+                setInterval(new Pair<>(0, (lowerMapLayer.length-1)));
             }
         }
         buildPath(true, true);
@@ -1757,7 +1764,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             return;
         }
         setInterval(new Pair<>(Math.max(workingInterval.getLeft(), 0), line*2 + 1));
-        miningPath();
+        minePath();
         state = State.Mining;
     }
 
@@ -2246,8 +2253,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         StandBy,
         Walking,
         Mining,
-        Dumping,
-        Cleanup
+        Dumping
     }
 
     private enum SprintMode {
