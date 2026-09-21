@@ -59,6 +59,7 @@ public final class SlaveSystem {
     }
 
     public static void sendToSlave(String username, String message) {
+        // ChatUtils.info(username + ": " + message);
         LocalTcpTransport.sendToSlave(username, message);
     }
 
@@ -189,11 +190,18 @@ public final class SlaveSystem {
                 if (tableController != null) tableController.rebuild();
                 break;
             case "placeStatus":
+                boolean longVariant = colonSplit.length == 7;
+                int startZ = longVariant ? Integer.parseInt(colonSplit[3]) : 0;
+                int endZ = longVariant ? Integer.parseInt(colonSplit[4]) : 127;
+                boolean targetValue = longVariant ? Boolean.parseBoolean(colonSplit[5]) : Boolean.parseBoolean(colonSplit[3]);
+                boolean isUpper = longVariant ? Boolean.parseBoolean(colonSplit[6]): Boolean.parseBoolean(colonSplit[4]);
                 SlaveSystem.mapCompletionState.setInterval(
                     Integer.parseInt(colonSplit[1]),
                     Integer.parseInt(colonSplit[2]),
-                    Boolean.parseBoolean(colonSplit[3]),
-                    Boolean.parseBoolean(colonSplit[4]));
+                    startZ,
+                    endZ,
+                    targetValue,
+                    isUpper);
                 break;
             case "error":
                 if (colonSplit.length >= 3) {

@@ -418,6 +418,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     int lastPlacedLine;
     int minedLines;
     int suppressedLines;
+    int lastReportedZ;
     long lastTickTime;
     boolean closeNextInvPacket;
     boolean workOnUpper;
@@ -491,6 +492,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         toBeSwappedSlot = -1;
         minedLines = 128;
         suppressedLines = -1;
+        lastReportedZ = -1;
         oldState = null;
         debugPreviousState = null;
         lowerMapLayer = new Block[128][129][2];
@@ -783,6 +785,26 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             }
         }
 
+        if (SlaveSystem.isSlave && workOnUpper && state == State.Mining && getNextMiningPos() != null
+            && !checkpoints.isEmpty() && checkpoints.getFirst().getRight().getLeft() == "mineEnd") {
+            int minedZ = getNextMiningPos().subtract(getActiveMapCorner()).getZ() - 2;
+            int relativeX = getNextMiningPos().getX() - getActiveMapCorner().getX();
+            if (!Utils.isInInterval(workingInterval, relativeX)) {
+                minedZ = 127;
+            }
+            if (minedZ > -1 && Math.abs(minedZ - lastReportedZ) > 0) {
+                lastReportedZ = minedZ;
+                boolean northToSouth = checkpoints.getFirst().getLeft().getZ() > mc.player.getZ();
+                if (northToSouth) {
+                    SlaveSystem.sendMessageToMaster("placeStatus:" + workingInterval.getLeft() + ":"
+                        + workingInterval.getRight() + ":" + 0 + ":" + minedZ + ":" + false + ":" + true);
+                } else {
+                    SlaveSystem.sendMessageToMaster("placeStatus:" + workingInterval.getLeft() + ":"
+                        + workingInterval.getRight() + ":" + minedZ + ":" + 127 + ":" + false + ":" + true);
+                }
+            }
+        }
+
         if (interactTimeout > 0) {
             interactTimeout--;
             if (interactTimeout == 0) {
@@ -984,6 +1006,9 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     state = State.AwaitRestockResponse;
                     interactWithBlock(checkpointAction.getRight());
                     return;
+                case "mineBegin":
+                    lastReportedZ = -1;
+                    break;
                 case "mineEnd":
                     state = State.StandBy;
                     Utils.setForwardPressed(false);
