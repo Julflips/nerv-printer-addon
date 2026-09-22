@@ -21,6 +21,12 @@ public final class MapCompletionState {
         ChatUtils.info("Update MCS: " + startX + " : " + endX + " | " + startZ + " : " + endZ + " on "
                         + (isUpperLayer ? "upper" : "lower") + " with value: " + value);
 
+        if (startX < 0 || endX >= lowerLayer.length || startZ < 0 || endZ >= lowerLayer[0].length) {
+            ChatUtils.error("Invalid intervals for MCS: " + startX + " : " + endX + " | " + startZ + " : " + endZ + " on "
+                + (isUpperLayer ? "upper" : "lower") + " with value: " + value);
+            return;
+        }
+
         boolean[][] layer = getLayer(isUpperLayer);
         for (int x = startX; x <= endX; x++) {
             Arrays.fill(layer[x], startZ, endZ + 1, value);

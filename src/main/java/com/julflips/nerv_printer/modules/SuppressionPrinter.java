@@ -419,6 +419,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     int minedLines;
     int suppressedLines;
     int lastReportedZ;
+    int awaitSuppressionZ;
     long lastTickTime;
     boolean closeNextInvPacket;
     boolean workOnUpper;
@@ -785,16 +786,22 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             }
         }
 
-        if (SlaveSystem.isSlave && workOnUpper && state == State.Mining && getNextMiningPos() != null
-            && !checkpoints.isEmpty() && checkpoints.getFirst().getRight().getLeft() == "mineEnd") {
-            int minedZ = getNextMiningPos().subtract(getActiveMapCorner()).getZ() - 2;
-            int relativeX = getNextMiningPos().getX() - getActiveMapCorner().getX();
-            if (!Utils.isInInterval(workingInterval, relativeX)) {
-                minedZ = 127;
+        if (SlaveSystem.isSlave && workOnUpper && state == State.Mining && !checkpoints.isEmpty()
+            && checkpoints.getFirst().getRight().getLeft() == "mineEnd") {
+            BlockPos nextPos = getNextMiningPos();
+            boolean northToSouth = checkpoints.getFirst().getLeft().getZ() > mc.player.getZ();
+            int minedZ;
+            if (nextPos == null) {
+                if (northToSouth) minedZ = 127;
+                else minedZ = 0;
+            } else {
+                minedZ = nextPos.subtract(getActiveMapCorner()).getZ();
+                int northToSouthModifier = northToSouth ? -2 : 1;
+                minedZ += northToSouthModifier;
             }
-            if (minedZ > -1 && Math.abs(minedZ - lastReportedZ) > 0) {
+
+            if (minedZ > -1 && minedZ < 128 && Math.abs(minedZ - lastReportedZ) > 0) {
                 lastReportedZ = minedZ;
-                boolean northToSouth = checkpoints.getFirst().getLeft().getZ() > mc.player.getZ();
                 if (northToSouth) {
                     SlaveSystem.sendMessageToMaster("placeStatus:" + workingInterval.getLeft() + ":"
                         + workingInterval.getRight() + ":" + 0 + ":" + minedZ + ":" + false + ":" + true);
@@ -802,6 +809,17 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     SlaveSystem.sendMessageToMaster("placeStatus:" + workingInterval.getLeft() + ":"
                         + workingInterval.getRight() + ":" + minedZ + ":" + 127 + ":" + false + ":" + true);
                 }
+            }
+        }
+
+        if (state.equals(State.AwaitMinedSuppression)) {
+            int startZ = Math.max(0, awaitSuppressionZ-16);
+            int endZ = Math.min(127, awaitSuppressionZ+16);
+            if (SlaveSystem.mapCompletionState.isLineComplete(true, suppressedLines-1, startZ, endZ, false)) {
+                info("Sucessfully waited for: " + awaitSuppressionZ);
+                state = State.Walking;
+            } else {
+                return;
             }
         }
 
@@ -867,10 +885,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             }
         }
 
-        if (state.equals(State.AwaitSuppressionReady)) {
-            if (SlaveSystem.mapCompletionState.isLineComplete(true, suppressedLines, false) &&
-                SlaveSystem.mapCompletionState.isLineComplete(false, suppressedLines, true) &&
-                SlaveSystem.mapCompletionState.isLineComplete(true, suppressedLines+1, true) &&
+        if (state.equals(State.AwaitPlacedSuppression)) {
+            if (SlaveSystem.mapCompletionState.isLineComplete(true, suppressedLines+1, true) &&
                 SlaveSystem.mapCompletionState.isLineComplete(false, suppressedLines+1, true)) {
 
                 suppressedLines++;
@@ -954,13 +970,13 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     interactWithBlock(mapMaterialChest);
                     return;
                 case "fillMap":
-                    state = State.AwaitSuppressionReady;
+                    state = State.AwaitPlacedSuppression;
                     Utils.setForwardPressed(false);
                     mc.getNetworkHandler().sendPacket(new PlayerInteractItemC2SPacket(Hand.MAIN_HAND, Utils.getNextInteractID(), mc.player.getYaw(), mc.player.getPitch()));
                     return;
                 case "awaitSuppression":
                     Utils.setForwardPressed(false);
-                    state = State.AwaitSuppressionReady;
+                    state = State.AwaitPlacedSuppression;
                     if (suppressedLines < 0) return;
                     if (suppressedLines > 0) {
                         info("add lower mining command: " + (suppressedLines-1));
@@ -978,6 +994,15 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     Utils.setForwardPressed(false);
                     Utils.setSneakPressed(false);
                     timeoutTicks = mapLoadTimeout.get();
+                    awaitSuppressionZ =  (int) Math.floor(goal.z) - lowerMapCorner.getZ();
+                    int startZ = Math.max(0, awaitSuppressionZ-16);
+                    int endZ = Math.min(127, awaitSuppressionZ+16);
+                    if (SlaveSystem.mapCompletionState.isLineComplete(true, suppressedLines-1, startZ, endZ, false)) {
+                        info("Sucessfully waited for: " + awaitSuppressionZ);
+                        return;
+                    }
+                    state = State.AwaitMinedSuppression;
+                    info("AwaitMiningSuppression for z: " + awaitSuppressionZ);
                     return;
                 case "cartographyTable":
                     state = State.AwaitCartographyResponse;
@@ -1073,21 +1098,30 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             mc.player.setPitch((float) Rotations.getPitch(nextBlockPos));
             BlockState blockState = MapAreaCache.getCachedBlockState(nextBlockPos);
             ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockState);
+            int bestHotbarSlot = -1;
+            // Search for the tool with the optimal tool type and minimal durability above the threshold
             for (int slot : availableHotBarSlots) {
                 if (mc.player.getInventory().getStack(slot).isEmpty()) continue;
                 ItemStack itemStack = mc.player.getInventory().getStack(slot);
                 if (itemStack.getItem().equals(bestTool.getItem())) {
-                    if (ToolUtils.getRemainingDamage(itemStack) < minDurability.get()) continue;
-                    InvUtils.swap(slot, false);
-                    BlockUtils.breakBlock(nextBlockPos, true);
-                    state = State.Mining;
-                    if (Math.abs(nextBlockPos.getZ() - mc.player.getZ()) <= minMiningRange.get()) {
-                        state = State.AwaitBlockBreak;
+                    int remainingDamage = ToolUtils.getRemainingDamage(itemStack);
+                    if (remainingDamage < minDurability.get()) continue;
+                    if (bestHotbarSlot == -1 || remainingDamage < ToolUtils.getRemainingDamage(bestTool)) {
+                        bestHotbarSlot = slot;
+                        bestTool = itemStack;
                     }
-                    return;
                 }
             }
-            warning("No tool with enough durability found to mine blocks");
+            if (bestHotbarSlot == -1) {
+                warning("No tool with enough durability found to mine blocks");
+                return;
+            }
+            InvUtils.swap(bestHotbarSlot, false);
+            BlockUtils.breakBlock(nextBlockPos, true);
+            state = State.Mining;
+            if (Math.abs(nextBlockPos.getZ() - mc.player.getZ()) <= minMiningRange.get()) {
+                state = State.AwaitBlockBreak;
+            }
         }
     }
 
@@ -1488,7 +1522,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             for (Integer suppressionCheckpoint : suppressionCheckpoints) {
                 Vec3d entry = lowerMapCorner.toCenterPos().add(xOffset + 1.4f,-3.5,suppressionCheckpoint);
                 checkpoints.add(new Pair(entry, new Pair("startSneak", null)));
-                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset - 0.2f,-3.5, suppressionCheckpoint), new Pair("stopSneak", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset - 0.1f,-3.5, suppressionCheckpoint), new Pair("stopSneak", null)));
                 checkpoints.add(new Pair(entry, new Pair("sprint", null)));
             }
             // Go to next suppression line
@@ -2272,7 +2306,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         AwaitCartographyResponse,
         AwaitNBTFile,
         AwaitBlockBreak,
-        AwaitSuppressionReady,
+        AwaitPlacedSuppression,
+        AwaitMinedSuppression,
         AwaitMasterAllCleared,
         AwaitSlaveContinue,
         StandBy,
