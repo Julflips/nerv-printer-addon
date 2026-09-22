@@ -54,6 +54,12 @@ public final class SlaveSystem {
         }
     }
 
+    public static void setAllSlavesActive() {
+        for (String slave : activeSlavesDict.keySet()) {
+            activeSlavesDict.put(slave, true);
+        }
+    }
+
     public static void sendToAllSlaves(String message) {
         LocalTcpTransport.sendToAllSlaves(message);
     }
@@ -125,7 +131,6 @@ public final class SlaveSystem {
     public static void handleIncomingTcpMessage(String sender, String rawMessage) {
         // If no sender is specified, the message is from master
         if (rawMessage == null || rawMessage.isBlank()) return;
-        ChatUtils.info(rawMessage);
         String[] colonSplit = rawMessage.replace(" ", "").split(":");
         String command = colonSplit[0];
 
@@ -171,7 +176,7 @@ public final class SlaveSystem {
             case "register":
                 if (!slaves.contains(sender)) {
                     slaves.add(sender);
-                    finishedSlavesDict.put(sender, false);
+                    finishedSlavesDict.put(sender, true);
                     activeSlavesDict.put(sender, false);
                     if (printerModule instanceof SuppressionPrinter) {
                         slavesLayerDict.put(sender, sendToUpper);

@@ -18,9 +18,7 @@ public final class MapCompletionState {
     }
 
     public static synchronized void setInterval(int startX, int endX, int startZ, int endZ, boolean value, boolean isUpperLayer) {
-        ChatUtils.info("Update MCS: " + startX + " : " + endX + " | " + startZ + " : " + endZ + " on "
-                        + (isUpperLayer ? "upper" : "lower") + " with value: " + value);
-
+        // ChatUtils.info("Update MCS: " + startX + " : " + endX + " | " + startZ + " : " + endZ + " on " + (isUpperLayer ? "upper" : "lower") + " with value: " + value);
         if (startX < 0 || endX >= lowerLayer.length || startZ < 0 || endZ >= lowerLayer[0].length) {
             ChatUtils.error("Invalid intervals for MCS: " + startX + " : " + endX + " | " + startZ + " : " + endZ + " on "
                 + (isUpperLayer ? "upper" : "lower") + " with value: " + value);

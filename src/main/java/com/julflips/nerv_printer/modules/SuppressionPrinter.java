@@ -238,9 +238,9 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     private final Setting<Integer> mapLoadTimeout = sgAdvanced.add(new IntSetting.Builder()
         .name("map-load-timeout")
         .description("How many ticks to wait to update the map in hand.")
-        .defaultValue(7)
+        .defaultValue(20)
         .min(0)
-        .sliderRange(0, 20)
+        .sliderRange(0, 40)
         .build()
     );
 
@@ -754,7 +754,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         break;
                     }
                 }
-                // ToDo: Do mining for <4 slaves
+                info("ToDo: Do mining for <4 slaves");
                 state = State.AwaitNBTFile;
                 break;
         }
@@ -915,6 +915,19 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
         // Load next nbt file
         if (state == State.AwaitNBTFile) {
+            if (!SlaveSystem.isSlave) {
+                if (!SlaveSystem.allSlavesFinished()) return;
+                if (mapFile != null) {
+                    try {
+                        if (moveToFinishedFolder.get())
+                            mapFile.renameTo(new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName()));
+                    } catch (Exception e) {
+                        warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
+                        e.printStackTrace();
+                    }
+                }
+            }
+
             if (!prepareNextMapFile()) {
                 return;
             }
@@ -1004,8 +1017,25 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     state = State.AwaitMinedSuppression;
                     info("AwaitMiningSuppression for z: " + awaitSuppressionZ);
                     return;
+                case "swapMap":
+                    // Avoid destroying the map by loading it
+                    FindItemResult mapItem = InvUtils.findInHotbar(Items.FILLED_MAP);
+                    if (!mapItem.found()) break;
+                    // If there is a non-hotbar-slot. Swap the map to it
+                    if (availableSlots.size() > availableHotBarSlots.size()) {
+                        for (int slot : availableSlots) {
+                            if (availableHotBarSlots.contains(slot)) continue;
+                            Utils.performSwap(slot, mapItem.slot());
+                        }
+                    } else {
+                        // Switch to something that is not the filled map
+                        int targetSlot = mapItem.found() ? (mapItem.slot()+1) % 9 : 8;
+                        mc.player.getInventory().setSelectedSlot(targetSlot);
+                    }
+                    break;
                 case "cartographyTable":
                     state = State.AwaitCartographyResponse;
+                    Utils.setForwardPressed(false);
                     interactWithBlock(cartographyTable.getLeft());
                     return;
                 case "finishedMapChest":
@@ -1053,8 +1083,9 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     // Done Building
                     info("Done building");
                     checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("dump", null)));
-                    checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("slaveFinished", null)));
-                    if (!SlaveSystem.isSlave) {
+                    if (SlaveSystem.isSlave) {
+                        checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("slaveFinished", null)));
+                    } else {
                         // Master
                         fillMapPath();
                     }
@@ -1088,12 +1119,11 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             nextBlockPos = getNextMiningPos();
         }
 
-        if (nextBlockPos == null) return;
+        // ToDo fix this
+        if (nextBlockPos == null || PlayerUtils.distanceTo(nextBlockPos.toCenterPos()) > interactionRange.get()) return;
 
         if (state.equals(State.Walking)) {
-            if (PlayerUtils.distanceTo(nextBlockPos.toCenterPos()) <= interactionRange.get()) {
-                tryPlacingBlock();
-            }
+            tryPlacingBlock();
         } else {
             mc.player.setPitch((float) Rotations.getPitch(nextBlockPos));
             BlockState blockState = MapAreaCache.getCachedBlockState(nextBlockPos);
@@ -1522,18 +1552,16 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             for (Integer suppressionCheckpoint : suppressionCheckpoints) {
                 Vec3d entry = lowerMapCorner.toCenterPos().add(xOffset + 1.4f,-3.5,suppressionCheckpoint);
                 checkpoints.add(new Pair(entry, new Pair("startSneak", null)));
-                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset - 0.1f,-3.5, suppressionCheckpoint), new Pair("stopSneak", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset,-3.5, suppressionCheckpoint), new Pair("stopSneak", null)));
                 checkpoints.add(new Pair(entry, new Pair("sprint", null)));
             }
             // Go to next suppression line
             checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset + 2,-3.5, suppressionCheckpoints.getLast()), new Pair("awaitSuppression", null)));
         } else {
-            // Switch to something that is not the filled map in hotbar to not destroy the map
-            FindItemResult mapItem = InvUtils.findInHotbar(Items.FILLED_MAP);
-            int targetSlot = mapItem.found() ? (mapItem.slot()+1) % 9 : 8;
-            mc.player.getInventory().setSelectedSlot(targetSlot);
             suppressedLines = -1;
-            // Finished Suppression. Lock the finished map
+            timeoutTicks = mapLoadTimeout.get();
+            // Finished Suppression. Swap away & lock the finished map
+            checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("swapMap", null)));
             checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,suppressionCheckpoints.getFirst()), new Pair("sprint", null)));
             checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
             checkpoints.add(new Pair(cartographyTable.getRight(), new Pair<>("cartographyTable", null)));
@@ -1572,6 +1600,9 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 toggle();
                 return;
             }
+
+            SlaveSystem.setAllSlavesUnfinished();
+            SlaveSystem.setAllSlavesActive();
 
             if (SlaveSystem.slaves.size() > 4) {
                 warning("Only 2-5 accounts are supported. More will not result in a speed up.");
@@ -1799,17 +1830,14 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     }
 
     public void start() {
-        if (availableSlots.isEmpty()) {
-            state = State.AwaitNBTFile;
-            return;
-        }
+        state = State.AwaitNBTFile;
     }
 
     public boolean getActivationReset() {
         return activationReset.get();
     }
 
-    public void skipBuilding() {}
+    public void skipBuilding() {info("todo");}
 
     public void slaveFinished(String slave) {}
 
