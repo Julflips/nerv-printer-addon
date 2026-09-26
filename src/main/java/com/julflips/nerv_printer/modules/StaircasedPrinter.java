@@ -1239,7 +1239,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 BlockState blockstate = MapAreaCache.getCachedBlockState(mapCorner.add(x, map[x][z].getRight(), z));
                 if (!blockstate.isAir()) {
                     ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockstate);
-                    if (bestTool == null) continue;
+                    if (bestTool == null || (blockstate.getHardness(mc.world, mapCorner.add(x, map[x][z].getRight(), z)) == 0.0f)) continue;
                     if (toolUseDict.containsKey(bestTool)) {
                         toolUseDict.put(bestTool, toolUseDict.get(bestTool) + 1);
                     } else {
