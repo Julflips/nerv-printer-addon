@@ -22,7 +22,7 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.*;
-import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.item.*;
 import net.minecraft.nbt.NbtCompound;
@@ -32,6 +32,8 @@ import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.network.packet.c2s.play.*;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
@@ -1248,17 +1250,15 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         }
 
         for (ItemStack itemStack : toolUseDict.keySet()) {
-            // Fetch unbreaking level
-            int unbreakingLevel = 0;
-            for (var e : EnchantmentHelper.getEnchantments(itemStack).getEnchantmentEntries()) {
-                if (!e.getKey().getKey().isPresent()) continue;
-                if (e.getKey().getKey().get().getValue().equals(Enchantments.UNBREAKING.getValue())) {
-                    unbreakingLevel = e.getIntValue();
-                }
-            }
+            // Fetch unbreaking enchantment level
+            RegistryEntry<Enchantment> unbreaking = mc.world.getRegistryManager()
+                .getOrThrow(RegistryKeys.ENCHANTMENT)
+                .getOrThrow(Enchantments.UNBREAKING);
+            int unbreakingLevel = itemStack.getEnchantments().getLevel(unbreaking);
+
             int rawUses = toolUseDict.get(itemStack);
             float slaveModifier = (float) (trueInterval.getRight() - trueInterval.getLeft() + 1) / (float) map.length;
-            double adjustedUses = (float) rawUses / (float) (unbreakingLevel + 1) * durabilityBuffer.get() * slaveModifier;
+            double adjustedUses = (float) rawUses / (float) (unbreakingLevel + 1) * (1 + durabilityBuffer.get()) * slaveModifier;
             int itemsNeeded = (int) Math.ceil(adjustedUses / (float) itemStack.getMaxDamage());
             info("Restocking §a" + itemsNeeded + " " + itemStack.getItem().getName().getString() + " (" + rawUses + " uses)");
             restockList.add(0, Triple.of(itemStack.getItem().asItem(), itemsNeeded, itemsNeeded));
