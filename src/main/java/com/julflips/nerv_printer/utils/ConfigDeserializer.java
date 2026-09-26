@@ -3,9 +3,17 @@ package com.julflips.nerv_printer.utils;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.enchantment.Enchantment;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.RegistryWrapper;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Pair;
 import net.minecraft.util.math.BlockPos;
@@ -15,10 +23,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 public final class ConfigDeserializer {
 
@@ -134,18 +139,54 @@ public final class ConfigDeserializer {
                 }
             }
 
+            if (net.minecraft.client.MinecraftClient.getInstance() == null
+                || net.minecraft.client.MinecraftClient.getInstance().world == null ) return data;
+
             data.toolSet = new HashSet<>();
-            if (root.has("toolSet")) {
+            RegistryWrapper.WrapperLookup registries =
+                net.minecraft.client.MinecraftClient.getInstance().world.getRegistryManager();
+            if (root.has("toolSet") && root.get("toolSet").isJsonArray()) {
                 for (JsonElement e : root.getAsJsonArray("toolSet")) {
+                    if (!e.isJsonObject()) continue;
                     JsonObject o = e.getAsJsonObject();
-                    Identifier id = Identifier.of(o.get("item").getAsString());
-                    data.toolSet.add(
-                        new ItemStack(Registries.ITEM.get(id))
-                    );
+                    if (!o.has("item")) continue;
+                    ItemStack stack = jsonToItemStack(o, registries);
+                    if (!stack.isEmpty()) {
+                        data.toolSet.add(stack);
+                    }
                 }
             }
 
             return data;
         }
+    }
+
+    private static ItemStack jsonToItemStack(JsonObject obj, RegistryWrapper.WrapperLookup registries) {
+        Identifier itemId = Identifier.of(obj.get("item").getAsString());
+        Item item = Registries.ITEM.get(itemId);
+        ItemStack stack = new ItemStack(item);
+        // Backward compatibility: older configs may not contain enchantments
+        if (!obj.has("enchantments") || !obj.get("enchantments").isJsonArray()) {
+            return stack;
+        }
+        ItemEnchantmentsComponent.Builder builder =
+            new ItemEnchantmentsComponent.Builder(ItemEnchantmentsComponent.DEFAULT);
+        // Get the dynamic enchantment registry using our passed-in wrapper lookup
+        RegistryWrapper.Impl<Enchantment> enchantmentRegistry =
+            registries.getOrThrow(RegistryKeys.ENCHANTMENT);
+        for (JsonElement enchantmentElement : obj.getAsJsonArray("enchantments")) {
+            if (!enchantmentElement.isJsonObject()) continue;
+            JsonObject enchantmentObj = enchantmentElement.getAsJsonObject();
+            if (!enchantmentObj.has("id") || !enchantmentObj.has("level")) continue;
+            Identifier enchantmentId = Identifier.of(enchantmentObj.get("id").getAsString());
+            int level = enchantmentObj.get("level").getAsInt();
+            if (level <= 0) continue;
+            RegistryKey<Enchantment> enchantKey = RegistryKey.of(RegistryKeys.ENCHANTMENT, enchantmentId);
+            Optional<RegistryEntry.Reference<Enchantment>> enchantmentEntry =
+                enchantmentRegistry.getOptional(enchantKey);
+            enchantmentEntry.ifPresent(entry -> builder.add(entry, level));
+        }
+        stack.set(DataComponentTypes.ENCHANTMENTS, builder.build());
+        return stack;
     }
 }

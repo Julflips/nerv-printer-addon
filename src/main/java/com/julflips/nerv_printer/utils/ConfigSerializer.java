@@ -159,7 +159,29 @@ public final class ConfigSerializer {
             JsonArray toolSetArray = new JsonArray();
             for (ItemStack stack : toolSet) {
                 JsonObject stackObj = new JsonObject();
-                stackObj.addProperty("item", Registries.ITEM.getId(stack.getItem()).toString());
+                // Save item ID
+                stackObj.addProperty(
+                    "item",
+                    Registries.ITEM.getId(stack.getItem()).toString()
+                );
+                // Save enchantments
+                JsonArray enchantmentsArray = new JsonArray();
+                var enchantments = stack.getEnchantments();
+                for (var enchantmentEntry : enchantments.getEnchantmentEntries()) {
+                    enchantmentEntry.getKey().getKey().ifPresent(enchantmentKey -> {
+                        JsonObject enchantmentObj = new JsonObject();
+                        enchantmentObj.addProperty(
+                            "id",
+                            enchantmentKey.getValue().toString()
+                        );
+                        enchantmentObj.addProperty(
+                            "level",
+                            enchantmentEntry.getIntValue()
+                        );
+                        enchantmentsArray.add(enchantmentObj);
+                    });
+                }
+                stackObj.add("enchantments", enchantmentsArray);
                 toolSetArray.add(stackObj);
             }
             root.add("toolSet", toolSetArray);
