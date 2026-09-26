@@ -9,8 +9,8 @@ public final class MapCompletionState {
     private static boolean[][] upperLayer;
 
     public static synchronized void initializeLayers() {
-        upperLayer = new boolean[128][128];
-        lowerLayer = new boolean[128][128];
+        upperLayer = new boolean[128][129];
+        lowerLayer = new boolean[128][129];
     }
 
     public static synchronized void setInterval(int startX, int endX, boolean value, boolean isUpperLayer) {

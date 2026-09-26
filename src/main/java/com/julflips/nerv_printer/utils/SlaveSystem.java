@@ -38,6 +38,7 @@ public final class SlaveSystem {
     }
 
     public static void sendMessageToMaster(String message) {
+        // ChatUtils.info(message);
         if (isSlave) LocalTcpTransport.sendToMaster(message);
     }
 
@@ -131,6 +132,7 @@ public final class SlaveSystem {
     public static void handleIncomingTcpMessage(String sender, String rawMessage) {
         // If no sender is specified, the message is from master
         if (rawMessage == null || rawMessage.isBlank()) return;
+        // ChatUtils.info(rawMessage);
         String[] colonSplit = rawMessage.replace(" ", "").split(":");
         String command = colonSplit[0];
 
@@ -183,7 +185,7 @@ public final class SlaveSystem {
                         sendToSlave(sender, "layer:" + sendToUpper);
                         sendToUpper = !sendToUpper;
                     }
-                    ChatUtils.info("Registered slave: " + sender + " Total slaves: " + slaves.size());
+                    ChatUtils.info("§aRegistered slave: " + sender + " Total slaves: §b" + slaves.size());
                     generateIntervals(slaves);
                     if (tableController != null) tableController.rebuild();
                 }
@@ -197,7 +199,7 @@ public final class SlaveSystem {
             case "placeStatus":
                 boolean longVariant = colonSplit.length == 7;
                 int startZ = longVariant ? Integer.parseInt(colonSplit[3]) : 0;
-                int endZ = longVariant ? Integer.parseInt(colonSplit[4]) : 127;
+                int endZ = longVariant ? Integer.parseInt(colonSplit[4]) : 128;
                 boolean targetValue = longVariant ? Boolean.parseBoolean(colonSplit[5]) : Boolean.parseBoolean(colonSplit[3]);
                 boolean isUpper = longVariant ? Boolean.parseBoolean(colonSplit[6]): Boolean.parseBoolean(colonSplit[4]);
                 SlaveSystem.mapCompletionState.setInterval(
