@@ -2371,7 +2371,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                             }
                             case Down -> {
                                 lowerMapLayer[x][z][0] = fillerBlock.get();
-                                upperMapLayer[x][z][0] = nextMaterial;
+                                // No nextMaterial needed in last filler-row
+                                if (z != 0) upperMapLayer[x][z][0] = nextMaterial;
                             }
                         }
                     }
@@ -2386,10 +2387,19 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                                 upperMapLayer[x][z][0] = nextMaterial;
                                 upperMapLayer[x][z-1][0] = fillerBlock.get();
                             }
-                            case Down -> upperMapLayer[x][z][0] = nextMaterial;
+                            case Down -> {
+                                // No nextMaterial needed in last filler-row
+                                if (z != 0) upperMapLayer[x][z][0] = nextMaterial;
+                            }
                         }
                     }
                 }
+                // Missing non-suppressed support block, for last suppressed block
+                if (z == 1 && heightDiffArray[x][0].equals(HeightDiff.Even)) {
+                    info(heightDiffArray[x][0].toString());
+                    lowerMapLayer[x][0][0] = fillerBlock.get();
+                }
+
                 z-=2;
             }
         }
