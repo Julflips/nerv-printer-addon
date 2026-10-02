@@ -823,8 +823,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     }
                 }
 
-                // Master joins mining process if at least 3 lines are to be mined
-                if (lowerMiningCommand.size() >= 3) {
+                // Master joins mining process if at least 10 lines are to be mined
+                if (lowerMiningCommand.size() >= 10) {
                     setInterval(new Pair<>(127, 127));
                     mineLine(-1);
                     return;
