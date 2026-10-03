@@ -2411,7 +2411,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 }
                 // Missing non-suppressed support block, for last suppressed block
                 if (z == 1 && heightDiffArray[x][0].equals(HeightDiff.Even)) {
-                    info(heightDiffArray[x][0].toString());
                     lowerMapLayer[x][0][0] = fillerBlock.get();
                 }
 
