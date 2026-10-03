@@ -985,8 +985,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         && itemEntity.getOwner() == null
                         && itemEntity.getY() >= getActiveMapCorner().getY()
                         && itemEntity.getY() < getActiveMapCorner().getY() + 2
-                        && itemEntity.getX() < lowerMapCorner.getX()+workingInterval.getRight() + 1 + maxXCollectionDistance.get()
-                        && itemEntity.getX() > lowerMapCorner.getX()
+                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + 1 + maxXCollectionDistance.get()
+                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() - 1
                         && itemEntity.getZ() * zModifier > (mc.player.getZ() + minZCollectionDistance.get()) * zModifier) {
                         // Cap the collectionPos to avoid the player trying to walk into walls
                         Vec3d collectionPos = new Vec3d(
@@ -1693,7 +1693,22 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     private void fillMapPath() {
         state = State.Walking;
         setInterval(new Pair<>(0, -1));
-        checkpoints.add(new Pair(usedToolChest.getRight(), new Pair("usedToolChestDumpAll", null)));
+
+        boolean hasTools = false;
+        for (int slot : availableSlots) {
+            if (mc.player.getInventory().getStack(slot) != null
+                && ToolUtils.isTool(mc.player.getInventory().getStack(slot))) {
+                info("stack: " + mc.player.getInventory().getStack(slot).getItem().getName().getString());
+                hasTools = true;
+                break;
+            }
+        }
+        if (hasTools) {
+            checkpoints.add(new Pair(usedToolChest.getRight(), new Pair("usedToolChestDumpAll", null)));
+        } else {
+            checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("dump", null)));
+        }
+
         Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
         checkpoints.add(new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
         checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
