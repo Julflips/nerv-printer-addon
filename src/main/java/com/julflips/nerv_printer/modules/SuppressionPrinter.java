@@ -2443,6 +2443,13 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         };
         table.row();
 
+        WButton closeConnection = table.add(theme.button("Close Connection")).widget();
+        closeConnection.action = () -> {
+            SlaveSystem.closeConnection();
+            if (isActive()) toggle();
+        };
+        table.row();
+
         WTable slaveTable = new WTable();
         list.add(slaveTable);
 

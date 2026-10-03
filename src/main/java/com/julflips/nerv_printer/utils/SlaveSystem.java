@@ -23,23 +23,27 @@ public final class SlaveSystem {
     private static boolean sendToUpper = true;
 
     public static void setupSlaveSystem(MapPrinter module, String ip, int port) {
+        if (LocalTCPTransport.isRunning()) {
+            ChatUtils.warning("TCP Transport is already running! Press 'Reset Connection' to reset.");
+            return;
+        }
         printerModule = module;
         slaves.clear();
         activeSlavesDict.clear();
         finishedSlavesDict.clear();
         slavesLayerDict.clear();
-        isSlave = LocalTcpTransport.initialize(ip, port);
+        isSlave = LocalTCPTransport.initialize(ip, port);
         sendToUpper = true;
         mapCompletionState.initializeLayers();
     }
 
     public static void setTcpAddress(String ip, int port) {
-        isSlave = LocalTcpTransport.initialize(ip, port);
+        isSlave = LocalTCPTransport.initialize(ip, port);
     }
 
     public static void sendMessageToMaster(String message) {
         // ChatUtils.info(message);
-        if (isSlave) LocalTcpTransport.sendToMaster(message);
+        if (isSlave) LocalTCPTransport.sendToMaster(message);
     }
 
     public static boolean allSlavesFinished() {
@@ -62,12 +66,12 @@ public final class SlaveSystem {
     }
 
     public static void sendToAllSlaves(String message) {
-        LocalTcpTransport.sendToAllSlaves(message);
+        LocalTCPTransport.sendToAllSlaves(message);
     }
 
     public static void sendToSlave(String username, String message) {
         // ChatUtils.info(username + ": " + message);
-        LocalTcpTransport.sendToSlave(username, message);
+        LocalTCPTransport.sendToSlave(username, message);
     }
 
     public static void startAllSlaves() {
@@ -96,6 +100,16 @@ public final class SlaveSystem {
     public static void skipNextBuilding() {
         sendToAllSlaves("skip");
         if (printerModule != null) printerModule.skipBuilding();
+    }
+
+    public static void closeConnection() {
+        LocalTCPTransport.close();
+        if (!isSlave) {
+            slaves.clear();
+            activeSlavesDict.clear();
+            finishedSlavesDict.clear();
+            slavesLayerDict.clear();
+        }
     }
 
     public static void generateIntervals(ArrayList<String> slaveList) {

@@ -542,7 +542,6 @@ public class StaircasedPrinter extends Module implements MapPrinter {
 
     @Override
     public void onDeactivate() {
-        LocalTcpTransport.close();
         Utils.setForwardPressed(false);
         Utils.setBackwardPressed(false);
         Utils.setJumpPressed(false);
@@ -2059,6 +2058,13 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 false
             );
             if (path != null) loadConfig(new File(path));
+        };
+        table.row();
+
+        WButton closeConnection = table.add(theme.button("Close Connection")).widget();
+        closeConnection.action = () -> {
+            SlaveSystem.closeConnection();
+            if (isActive()) toggle();
         };
         table.row();
 

@@ -1,6 +1,5 @@
 package com.julflips.nerv_printer.utils;
 
-import com.mojang.datafixers.kinds.IdF;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import net.minecraft.client.MinecraftClient;
 import org.spongepowered.include.com.google.common.collect.BiMap;
@@ -19,7 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class LocalTcpTransport {
+public final class LocalTCPTransport {
     private static final Object SOCKET_LOCK = new Object();
 
     private static String host;
@@ -43,6 +42,10 @@ public final class LocalTcpTransport {
         if (connectToMaster()) return true;
         startServer();
         return false;
+    }
+
+    public static boolean isRunning() {
+        return slaveSockets.size() > 0 || masterSocket != null;
     }
 
     public static void sendToMaster(String payload) {
@@ -181,12 +184,11 @@ public final class LocalTcpTransport {
                     }
                 }
 
+                if (line == "close") close();
+
                 SlaveSystem.handleIncomingTcpMessage(sender, line);
             }
-        } catch (IOException e) {
-            if (!socket.isClosed()) {
-                ChatUtils.error("TCP socket read failed: " + e.getMessage());
-            }
+        } catch (IOException ignored) {
         } finally {
             synchronized (SOCKET_LOCK) {
                 if (sender != null && slaveSocketsByUsername.get(sender) == socket) {
@@ -231,6 +233,7 @@ public final class LocalTcpTransport {
                 masterSocket = null;
             }
             for (Socket socket : slaveSockets) {
+                writeLine(socket, "close");
                 closeQuietly(socket);
             }
             slaveSockets.clear();
