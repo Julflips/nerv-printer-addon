@@ -55,7 +55,7 @@ public final class MapAreaCache {
             Chunk chunk = cachedChunks.get(chunkPos);
             return chunk.getBlockState(blockPos);
         }
-        ChatUtils.warning("Could not fetch Block at " + blockPos.toShortString() + ". Try loading the entire Map Area first.");
+        // ChatUtils.warning("Could not fetch Block at " + blockPos.toShortString() + ". Try loading the entire Map Area first.");
         return mc.world.getBlockState(blockPos);
     }
 
