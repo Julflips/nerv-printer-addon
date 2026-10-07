@@ -184,7 +184,7 @@ public final class LocalTCPTransport {
                     }
                 }
 
-                if (line == "close") close();
+                if (line == "remove") close();
 
                 SlaveSystem.handleIncomingTcpMessage(sender, line);
             }
@@ -233,7 +233,7 @@ public final class LocalTCPTransport {
                 masterSocket = null;
             }
             for (Socket socket : slaveSockets) {
-                writeLine(socket, "close");
+                writeLine(socket, "remove");
                 closeQuietly(socket);
             }
             slaveSockets.clear();

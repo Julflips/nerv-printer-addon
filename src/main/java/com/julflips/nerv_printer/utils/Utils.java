@@ -50,6 +50,16 @@ public final class Utils {
         return list;
     }
 
+    public static boolean hasTool(ArrayList<Integer> availableSlots) {
+        for (int slot : availableSlots) {
+            if (mc.player.getInventory().getStack(slot) != null
+                && ToolUtils.isTool(mc.player.getInventory().getStack(slot))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static int stacksRequired(Collection<Integer> amounts) {
         //Calculates how many slots are required for the set of item amounts
         int stacks = 0;
