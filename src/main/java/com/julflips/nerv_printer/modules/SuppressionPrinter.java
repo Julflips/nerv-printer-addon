@@ -779,7 +779,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 timeoutTicks = postRestockDelay.get();
                 Utils.getOneItem(mapSlot, false, availableSlots, availableHotBarSlots, packet);
                 Utils.getOneItem(paneSlot, true, availableSlots, availableHotBarSlots, packet);
-                mc.player.getInventory().setSelectedSlot(availableHotBarSlots.get(0));
                 state = State.Walking;
                 break;
             case AwaitCartographyResponse:
@@ -989,8 +988,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         && itemEntity.getOwner() == null
                         && itemEntity.getY() >= getActiveMapCorner().getY()
                         && itemEntity.getY() < getActiveMapCorner().getY() + 2
-                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 2
-                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 3
+                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 1.6f
+                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 2.6f
                         && itemEntity.getZ() <= lowerMapCorner.getZ() + 129
                         && itemEntity.getZ() >= lowerMapCorner.getZ() - 2
                         && itemEntity.getZ() * zModifier > (mc.player.getZ() + minZCollectionDistance.get()) * zModifier) {
@@ -1041,6 +1040,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 if (suppressedLines > 0) {
                     // Suppress one line
                     suppressPath();
+                    // Wait for timeout if it was the last line
+                    if (suppressedLines == -1) return;
                 } else {
                     // Only continue filling map on first iteration
                     loadFirstLinePath();
@@ -1125,10 +1126,27 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     BlockPos mapMaterialChest = getBestChest(Items.CARTOGRAPHY_TABLE).getLeft();
                     interactWithBlock(mapMaterialChest);
                     return;
+                case "selectMapSlot":
+                    // Select map slot
+                    FindItemResult mapItem = InvUtils.findInHotbar(Items.MAP);
+                    if (!mapItem.found() || !availableHotBarSlots.contains(mapItem.slot())) {
+                        warning("Failed to find map item in hotbar! Stopping...");
+                        checkpoints.add(0, new Pair<>(mc.player.getEntityPos(), new Pair<>("selectMapSlot", null)));
+                        toggle();
+                        return;
+                    }
+                    mc.player.getInventory().setSelectedSlot(mapItem.slot());
+                    break;
                 case "fillMap":
                     state = State.AwaitPlacedSuppression;
                     Utils.setForwardPressed(false);
+                    // Load map and wait for it to update
                     mc.getNetworkHandler().sendPacket(new PlayerInteractItemC2SPacket(Hand.MAIN_HAND, Utils.getNextInteractID(), mc.player.getYaw(), mc.player.getPitch()));
+                    timeoutTicks = mapLoadTimeout.get();
+                    return;
+                case "awaitMapUpdate":
+                    Utils.setForwardPressed(false);
+                    timeoutTicks = mapLoadTimeout.get();
                     return;
                 case "awaitSuppression":
                     Utils.setForwardPressed(false);
@@ -1153,14 +1171,13 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     awaitSuppressionZ =  (int) Math.floor(goal.z) - lowerMapCorner.getZ();
                     int startZ = Math.max(0, awaitSuppressionZ-15);
                     int endZ = Math.min(128, awaitSuppressionZ+15);
-                    if (SlaveSystem.mapCompletionState.isLineComplete(true, suppressedLines-1, startZ, endZ, false)) {
-                        return;
+                    if (!SlaveSystem.mapCompletionState.isLineComplete(true, suppressedLines-1, startZ, endZ, false)) {
+                        state = State.AwaitMinedSuppression;
                     }
-                    state = State.AwaitMinedSuppression;
                     return;
                 case "swapMap":
                     // Avoid destroying the map by loading it
-                    FindItemResult mapItem = InvUtils.findInHotbar(Items.FILLED_MAP);
+                    mapItem = InvUtils.findInHotbar(Items.FILLED_MAP);
                     if (!mapItem.found()) break;
                     // If there is a non-hotbar-slot. Swap the map to it
                     if (availableSlots.size() > availableHotBarSlots.size()) {
@@ -1656,7 +1673,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 continue;
             }
             float cpX = Math.min(workingInterval.getRight() , x + linesPerRun.get());
-            float cp2Z = isLastLine ? lastPlacedZ + 0.3f : 128 + 0.2f;
+            float cp2Z = isLastLine ? lastPlacedZ + 0.2f : 128 + 0.2f;
             Vec3d cp1 = getActiveMapCorner().toCenterPos().add(cpX, -0.5f, -2);
             Vec3d cp2 = getActiveMapCorner().toCenterPos().add(cpX, -0.5f, cp2Z);
 
@@ -1724,12 +1741,12 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         Pair<BlockPos, Vec3d> bestChest = getBestChest(Items.CARTOGRAPHY_TABLE);
         checkpoints.add(new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
         checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
-        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,1), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,1), new Pair("selectMapSlot", null)));
         checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,116), new Pair("fillMap", null)));
     }
 
     private void loadFirstLinePath() {
-        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,12), new Pair("sprint", null)));
+        checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(125,-3.5,12), new Pair("awaitMapUpdate", null)));
         checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(128,-3.5,15), new Pair("awaitSuppression", null)));
         state = State.Walking;
     }
@@ -1897,6 +1914,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     }
 
     private void setMiningFinished() {
+        Utils.setForwardPressed(false);
         if (!SlaveSystem.isSlave) {
             // Master Mining Mode
             if (lowerMiningCommand.isEmpty()) {
@@ -1907,7 +1925,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             return;
         }
         state = State.StandBy;
-        Utils.setForwardPressed(false);
         SlaveSystem.sendMessageToMaster("finished");
     }
 
@@ -2496,6 +2513,33 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         };
         table.row();
 
+        WButton clearMapArea = table.add(theme.button("Clear Map Area & Start")).widget();
+        clearMapArea.action = () -> {
+            if (SlaveSystem.isSlave) {
+                warning("Only the master account can do initiate the clear.");
+                return;
+            }
+            if (SlaveSystem.slaves.isEmpty()) {
+                warning("Need to register at least 1 slave before clearing.");
+                return;
+            }
+
+            lowerMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 31).boxed().toList());
+            upperMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 31).boxed().toList());
+
+            // Prepare slaves for mining
+            for (int i = SlaveSystem.slaves.size() - 1; i >= Math.max(0, SlaveSystem.slaves.size()-2); i--) {
+                String slave = SlaveSystem.slaves.get(i);
+                SlaveSystem.sendToSlave(slave, "interval:" + -1 + ":" + -1);
+                SlaveSystem.sendToSlave(slave, "mine:" + -1);
+                SlaveSystem.finishedSlavesDict.put(slave, false);
+                SlaveSystem.activeSlavesDict.put(slave, true);
+            }
+            // Master slave helps mining
+            setInterval(new Pair<>(127, 127));
+            mineLine(-1);
+        };
+
         WButton closeConnection = table.add(theme.button("Close Connection")).widget();
         closeConnection.action = () -> {
             SlaveSystem.closeConnection();
@@ -2525,86 +2569,88 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     @EventHandler
     private void onRender(Render3DEvent event) {
         if (lowerMapCorner == null || !render.get()) return;
-        event.renderer.box(lowerMapCorner.getX(), lowerMapCorner.getY(), lowerMapCorner.getZ(), lowerMapCorner.getX() + upperMapLayer.length, lowerMapCorner.getY(), lowerMapCorner.getZ() + upperMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
-        if (upperMapCorner == null) return;
-        event.renderer.box(upperMapCorner.getX(), upperMapCorner.getY(), upperMapCorner.getZ(), upperMapCorner.getX() + upperMapLayer.length, upperMapCorner.getY(), upperMapCorner.getZ() + upperMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
+        try {
+            event.renderer.box(lowerMapCorner.getX(), lowerMapCorner.getY(), lowerMapCorner.getZ(), lowerMapCorner.getX() + upperMapLayer.length, lowerMapCorner.getY(), lowerMapCorner.getZ() + upperMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
+            if (upperMapCorner == null) return;
+            event.renderer.box(upperMapCorner.getX(), upperMapCorner.getY(), upperMapCorner.getZ(), upperMapCorner.getX() + upperMapLayer.length, upperMapCorner.getY(), upperMapCorner.getZ() + upperMapLayer[0].length, color.get(), color.get(), ShapeMode.Lines, 0);
 
-        if (renderNextBlockPos.get() && nextBlockPos != null) {
-            event.renderer.box(nextBlockPos, color.get(), color.get(), ShapeMode.Lines, 0);
-        }
+            if (renderNextBlockPos.get() && nextBlockPos != null) {
+                event.renderer.box(nextBlockPos, color.get(), color.get(), ShapeMode.Lines, 0);
+            }
 
-        if (renderMap.get() && !(state.equals(State.Mining) || state.equals(State.AwaitBlockBreak))) {
-            if (upperMapLayer != null && lowerMapLayer != null) {
-                for (int x = 0; x < lowerMapLayer.length; x++) {
-                    for (int z = 0; z < lowerMapLayer[x].length; z++) {
-                        for (int y = 0; y < lowerMapLayer[x][z].length; y++) {
-                            Block material = lowerMapLayer[x][z][y];
-                            BlockPos renderPos = new BlockPos(lowerMapCorner.getX() + x, lowerMapCorner.getY() + y, lowerMapCorner.getZ() + z);
-                            if (material != null && (MapAreaCache.getCachedBlockState(renderPos) == null || MapAreaCache.getCachedBlockState(renderPos).isAir())) {
-                                Color renderColor = color.get();
-                                if (material.equals(fillerBlock.get())) renderColor = Color.BLUE;
-                                event.renderer.box(renderPos, renderColor, renderColor, ShapeMode.Lines, 0);
+            if (renderMap.get() && !(state.equals(State.Mining) || state.equals(State.AwaitBlockBreak))) {
+                if (upperMapLayer != null && lowerMapLayer != null) {
+                    for (int x = 0; x < lowerMapLayer.length; x++) {
+                        for (int z = 0; z < lowerMapLayer[x].length; z++) {
+                            for (int y = 0; y < lowerMapLayer[x][z].length; y++) {
+                                Block material = lowerMapLayer[x][z][y];
+                                BlockPos renderPos = new BlockPos(lowerMapCorner.getX() + x, lowerMapCorner.getY() + y, lowerMapCorner.getZ() + z);
+                                if (material != null && (MapAreaCache.getCachedBlockState(renderPos) == null || MapAreaCache.getCachedBlockState(renderPos).isAir())) {
+                                    Color renderColor = color.get();
+                                    if (material.equals(fillerBlock.get())) renderColor = Color.BLUE;
+                                    event.renderer.box(renderPos, renderColor, renderColor, ShapeMode.Lines, 0);
+                                }
+                            }
+                        }
+                    }
+                    for (int x = 0; x < upperMapLayer.length; x++) {
+                        for (int z = 0; z < upperMapLayer[x].length; z++) {
+                            for (int y = 0; y < upperMapLayer[x][z].length; y++) {
+                                Block material = upperMapLayer[x][z][y];
+                                BlockPos renderPos = new BlockPos(upperMapCorner.getX() + x, upperMapCorner.getY() + y, upperMapCorner.getZ() + z);
+                                if (material != null && (MapAreaCache.getCachedBlockState(renderPos) == null || MapAreaCache.getCachedBlockState(renderPos).isAir())) {
+                                    Color renderColor = color.get();
+                                    if (material.equals(fillerBlock.get())) renderColor = Color.BLUE;
+                                    event.renderer.box(renderPos, renderColor, renderColor, ShapeMode.Lines, 0);
+                                }
                             }
                         }
                     }
                 }
-                for (int x = 0; x < upperMapLayer.length; x++) {
-                    for (int z = 0; z < upperMapLayer[x].length; z++) {
-                        for (int y = 0; y < upperMapLayer[x][z].length; y++) {
-                            Block material = upperMapLayer[x][z][y];
-                            BlockPos renderPos = new BlockPos(upperMapCorner.getX() + x, upperMapCorner.getY() + y, upperMapCorner.getZ() + z);
-                            if (material != null && (MapAreaCache.getCachedBlockState(renderPos) == null || MapAreaCache.getCachedBlockState(renderPos).isAir())) {
-                                Color renderColor = color.get();
-                                if (material.equals(fillerBlock.get())) renderColor = Color.BLUE;
-                                event.renderer.box(renderPos, renderColor, renderColor, ShapeMode.Lines, 0);
-                            }
-                        }
+            }
+
+            ArrayList<Pair<BlockPos, Vec3d>> renderedPairs = new ArrayList<>();
+            for (ArrayList<Pair<BlockPos, Vec3d>> list : materialDict.values()) {
+                renderedPairs.addAll(list);
+            }
+            renderedPairs.addAll(mapMaterialChests);
+            for (Pair<BlockPos, Vec3d> pair : renderedPairs) {
+                if (renderChestPositions.get())
+                    event.renderer.box(pair.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+                if (renderOpenPositions.get()) {
+                    Vec3d openPos = pair.getRight();
+                    event.renderer.box(openPos.x - indicatorSize.get(), openPos.y - indicatorSize.get(), openPos.z - indicatorSize.get(), openPos.x + indicatorSize.get(), openPos.y + indicatorSize.get(), openPos.z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+                }
+            }
+
+            if (renderCheckpoints.get()) {
+                for (Pair<Vec3d, Pair<String, BlockPos>> pair : checkpoints) {
+                    Vec3d cp = pair.getLeft();
+                    event.renderer.box(cp.x - indicatorSize.get(), cp.y - indicatorSize.get(), cp.z - indicatorSize.get(), cp.x + indicatorSize.get(), cp.y + indicatorSize.get(), cp.z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+                }
+            }
+
+            if (renderSpecialInteractions.get()) {
+                if (usedToolChest != null) {
+                    event.renderer.box(usedToolChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+                    event.renderer.box(usedToolChest.getRight().x - indicatorSize.get(), usedToolChest.getRight().y - indicatorSize.get(), usedToolChest.getRight().z - indicatorSize.get(), usedToolChest.getRight().getX() + indicatorSize.get(), usedToolChest.getRight().getY() + indicatorSize.get(), usedToolChest.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+                }
+                if (cartographyTable != null) {
+                    event.renderer.box(cartographyTable.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+                    event.renderer.box(cartographyTable.getRight().x - indicatorSize.get(), cartographyTable.getRight().y - indicatorSize.get(), cartographyTable.getRight().z - indicatorSize.get(), cartographyTable.getRight().x + indicatorSize.get(), cartographyTable.getRight().y + indicatorSize.get(), cartographyTable.getRight().z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+                }
+                if (finishedMapChest != null) {
+                    event.renderer.box(finishedMapChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
+                    event.renderer.box(finishedMapChest.getRight().x - indicatorSize.get(), finishedMapChest.getRight().y - indicatorSize.get(), finishedMapChest.getRight().z - indicatorSize.get(), finishedMapChest.getRight().x + indicatorSize.get(), finishedMapChest.getRight().y + indicatorSize.get(), finishedMapChest.getRight().z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
+                }
+                if (dumpStations != null) {
+                    for (int i = 0; i < dumpStations.size(); i++) {
+                        Vec3d pos = dumpStations.get(i).getLeft();
+                        event.renderer.box(pos.x - indicatorSize.get(), pos.y - indicatorSize.get(), pos.z - indicatorSize.get(), pos.x + indicatorSize.get(), pos.y + indicatorSize.get(), pos.z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
                     }
                 }
             }
-        }
-
-        ArrayList<Pair<BlockPos, Vec3d>> renderedPairs = new ArrayList<>();
-        for (ArrayList<Pair<BlockPos, Vec3d>> list : materialDict.values()) {
-            renderedPairs.addAll(list);
-        }
-        renderedPairs.addAll(mapMaterialChests);
-        for (Pair<BlockPos, Vec3d> pair : renderedPairs) {
-            if (renderChestPositions.get())
-                event.renderer.box(pair.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
-            if (renderOpenPositions.get()) {
-                Vec3d openPos = pair.getRight();
-                event.renderer.box(openPos.x - indicatorSize.get(), openPos.y - indicatorSize.get(), openPos.z - indicatorSize.get(), openPos.x + indicatorSize.get(), openPos.y + indicatorSize.get(), openPos.z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-        }
-
-        if (renderCheckpoints.get()) {
-            for (Pair<Vec3d, Pair<String, BlockPos>> pair : checkpoints) {
-                Vec3d cp = pair.getLeft();
-                event.renderer.box(cp.x - indicatorSize.get(), cp.y - indicatorSize.get(), cp.z - indicatorSize.get(), cp.x + indicatorSize.get(), cp.y + indicatorSize.get(), cp.z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-        }
-
-        if (renderSpecialInteractions.get()) {
-            if (usedToolChest != null) {
-                event.renderer.box(usedToolChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
-                event.renderer.box(usedToolChest.getRight().x - indicatorSize.get(), usedToolChest.getRight().y - indicatorSize.get(), usedToolChest.getRight().z - indicatorSize.get(), usedToolChest.getRight().getX() + indicatorSize.get(), usedToolChest.getRight().getY() + indicatorSize.get(), usedToolChest.getRight().getZ() + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-            if (cartographyTable != null) {
-                event.renderer.box(cartographyTable.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
-                event.renderer.box(cartographyTable.getRight().x - indicatorSize.get(), cartographyTable.getRight().y - indicatorSize.get(), cartographyTable.getRight().z - indicatorSize.get(), cartographyTable.getRight().x + indicatorSize.get(), cartographyTable.getRight().y + indicatorSize.get(), cartographyTable.getRight().z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-            if (finishedMapChest != null) {
-                event.renderer.box(finishedMapChest.getLeft(), color.get(), color.get(), ShapeMode.Lines, 0);
-                event.renderer.box(finishedMapChest.getRight().x - indicatorSize.get(), finishedMapChest.getRight().y - indicatorSize.get(), finishedMapChest.getRight().z - indicatorSize.get(), finishedMapChest.getRight().x + indicatorSize.get(), finishedMapChest.getRight().y + indicatorSize.get(), finishedMapChest.getRight().z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-            }
-            if (dumpStations != null) {
-                for (int i = 0; i < dumpStations.size(); i++) {
-                    Vec3d pos = dumpStations.get(i).getLeft();
-                    event.renderer.box(pos.x - indicatorSize.get(), pos.y - indicatorSize.get(), pos.z - indicatorSize.get(), pos.x + indicatorSize.get(), pos.y + indicatorSize.get(), pos.z + indicatorSize.get(), color.get(), color.get(), ShapeMode.Both, 0);
-                }
-            }
-        }
+        } catch (ConcurrentModificationException ignored) {}
     }
 
     private void forEachMapBlock(MapBlockAction action) {
