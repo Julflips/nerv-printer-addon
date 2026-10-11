@@ -53,6 +53,8 @@ import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -1068,8 +1070,14 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 if (!SlaveSystem.allSlavesFinished()) return;
                 if (mapFile != null) {
                     try {
-                        if (moveToFinishedFolder.get())
-                            mapFile.renameTo(new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName()));
+                        if (moveToFinishedFolder.get()) {
+                            File targetFile = new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName());
+                            Files.move(
+                                mapFile.toPath(),
+                                targetFile.toPath(),
+                                StandardCopyOption.REPLACE_EXISTING
+                            );
+                        }
                     } catch (Exception e) {
                         warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
                         e.printStackTrace();

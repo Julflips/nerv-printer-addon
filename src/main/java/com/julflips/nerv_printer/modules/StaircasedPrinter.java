@@ -50,6 +50,8 @@ import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -1518,8 +1520,14 @@ public class StaircasedPrinter extends Module implements MapPrinter {
         checkpoints.add(new Pair(dumpStation.getLeft(), new Pair("dump", null)));
         checkpoints.add(new Pair(bestChest.getRight(), new Pair("mapMaterialChest", bestChest.getLeft())));
         try {
-            if (moveToFinishedFolder.get())
-                mapFile.renameTo(new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName()));
+            if (moveToFinishedFolder.get()) {
+                File targetFile = new File(mapFile.getParentFile().getAbsolutePath() + File.separator + "_finished_maps" + File.separator + mapFile.getName());
+                Files.move(
+                    mapFile.toPath(),
+                    targetFile.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+                );
+            }
         } catch (Exception e) {
             warning("Failed to move map file " + mapFile.getName() + " to finished map folder");
             e.printStackTrace();
