@@ -1708,23 +1708,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     private void minePath(int lineX) {
         checkpoints.clear();
-
-        // If no block is to be mined, immediately finish
-        boolean lineFinished = true;
-        for (int x = lineX; x >= lineX-1; x--) {
-            for (int z = 0; z < upperMapLayer[0].length; z++) {
-                for (int y = 0; y < upperMapLayer[0][0].length; y++) {
-                    if (!MapAreaCache.getCachedBlockState(getActiveMapCorner().add(x, y, z)).isAir()) {
-                        lineFinished = false;
-                    }
-                }
-            }
-        }
-        if (lineFinished) {
-            checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("mineFinished", null)));
-            return;
-        }
-
         Vec3d cp1 = getActiveMapCorner().toCenterPos().add(lineX-0.5f, -0.5f, -1);
         Vec3d cp2 = getActiveMapCorner().toCenterPos().add(lineX-0.5f, -0.5f, lowerMapLayer[0].length-1);
         if (mc.player.getZ() < lowerMapCorner.getZ() + lowerMapLayer[0].length / 2) {
@@ -2532,8 +2515,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 return;
             }
 
-            lowerMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 31).boxed().toList());
-            upperMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 31).boxed().toList());
+            lowerMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 63).boxed().toList());
+            upperMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 63).boxed().toList());
 
             // Prepare slaves for mining
             for (int i = SlaveSystem.slaves.size() - 1; i >= Math.max(0, SlaveSystem.slaves.size()-2); i--) {
@@ -2546,6 +2529,9 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             // Master slave helps mining
             setInterval(new Pair<>(127, 127));
             mineLine(-1);
+            // Prevent first mapFile from being moved
+            mapFile = null;
+            startedFiles.clear();
         };
 
         WButton closeConnection = table.add(theme.button("Close Connection")).widget();
@@ -2558,7 +2544,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         WTable slaveTable = new WTable();
         list.add(slaveTable);
 
-        SlaveTableController slaveController = new SlaveTableController(slaveTable, theme, true);
+        SlaveTableController slaveController = new SlaveTableController(slaveTable, theme, false);
         slaveController.rebuild();
 
         SlaveSystem.tableController = slaveController;

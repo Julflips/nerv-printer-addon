@@ -11,12 +11,12 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 public final class SlaveTableController {
     private final WTable table;
     private final GuiTheme theme;
-    private final boolean hasMining;
+    private final boolean staircased;
 
-    public SlaveTableController(WTable table, GuiTheme theme, boolean hasMining) {
+    public SlaveTableController(WTable table, GuiTheme theme, boolean oldStaircased) {
         this.table = table;
         this.theme = theme;
-        this.hasMining = hasMining;
+        this.staircased = oldStaircased;
     }
 
     public void rebuild() {
@@ -43,7 +43,7 @@ public final class SlaveTableController {
             rebuild();
         };
 
-        if (hasMining) {
+        if (staircased) {
             WButton skipNextBuilding = table.add(theme.button("Skip next building")).widget();
             skipNextBuilding.action = () -> {
                 SlaveSystem.skipNextBuilding();
