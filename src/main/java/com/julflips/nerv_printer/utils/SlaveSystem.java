@@ -172,7 +172,7 @@ public final class SlaveSystem {
                     printerModule.start();
                     break;
                 case "remove":
-                    printerModule.toggle();
+                    if (printerModule != null && printerModule.isActive()) printerModule.toggle();
                     break;
                 case "skip":
                     printerModule.skipBuilding();
