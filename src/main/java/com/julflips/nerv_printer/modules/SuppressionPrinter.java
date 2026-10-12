@@ -812,6 +812,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     }
                 }
                 mc.interactionManager.clickSlot(packet.syncId(), 2, 0, SlotActionType.QUICK_MOVE, mc.player);
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5, 15), new Pair("sprint", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
                 checkpoints.add(new Pair(finishedMapChest.getRight(), new Pair("finishedMapChest", null)));
                 state = State.Walking;
                 break;
@@ -1183,22 +1185,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         state = State.AwaitMinedSuppression;
                     }
                     return;
-                case "swapMap":
-                    // Avoid destroying the map by loading it
-                    mapItem = InvUtils.findInHotbar(Items.FILLED_MAP);
-                    if (!mapItem.found()) break;
-                    // If there is a non-hotbar-slot. Swap the map to it
-                    if (availableSlots.size() > availableHotBarSlots.size()) {
-                        for (int slot : availableSlots) {
-                            if (availableHotBarSlots.contains(slot)) continue;
-                            Utils.performSwap(slot, mapItem.slot());
-                        }
-                    } else {
-                        // Switch to something that is not the filled map
-                        int targetSlot = mapItem.found() ? (mapItem.slot()+1) % 9 : 8;
-                        mc.player.getInventory().setSelectedSlot(targetSlot);
-                    }
-                    break;
                 case "cartographyTable":
                     state = State.AwaitCartographyResponse;
                     Utils.setForwardPressed(false);
@@ -1223,7 +1209,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     mc.player.setPitch(throwingAngle.getRight());
                     return;
                 case "calculateMiningRefill":
-                    refillMiningInventory(true);
+                    refillMiningInventory(SlaveSystem.isSlave);
                     return;
                 case "calculateRefill":
                     HashMap<Item, Integer> requiredItems = getRequiredItems();
@@ -1475,7 +1461,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
         float goalX = 0.5f;
         if (!SlaveSystem.isSlave) goalX = 126.5f;
-        checkpoints.add(new Pair<>(getActiveMapCorner().toCenterPos().add(goalX,-0.5f, -1), new Pair<>("slaveFinished", null)));
+        checkpoints.add(new Pair<>(getActiveMapCorner().toCenterPos().add(goalX,-0.5f, -2.5), new Pair<>("slaveFinished", null)));
 
         addClosestRestockCheckpoint();
     }
@@ -1765,9 +1751,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             suppressedLines = -1;
             timeoutTicks = mapLoadTimeout.get();
             // Finished Suppression. Swap away & lock the finished map
-            checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("swapMap", null)));
-            checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-3.5,suppressionCheckpoints.getFirst()), new Pair("sprint", null)));
-            checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(129,-1,-2), new Pair("sprint", null)));
+            mc.player.getInventory().setSelectedSlot(8);
             checkpoints.add(new Pair(cartographyTable.getRight(), new Pair<>("cartographyTable", null)));
         }
     }
