@@ -18,7 +18,7 @@ Make sure it fulfills the following points:
 - If Phantoms are on you need a glass ceiling.
 - If you play on hard difficulty don't forget the regeneration 2 beacons
 
-**A litematica file with an example Map Area can be found [here](CarpetPrinter.litematic).**
+**A litematica file with an example Map Area can be found [here](Schematics/CarpetPrinter.litematic).**
 
 ### Special blocks
 Let's go over all the special blocks we need at the restock station.

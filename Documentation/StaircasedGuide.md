@@ -14,7 +14,7 @@ The schematic linked below uses the shallow water color.
 
 ## Platform Setup
 
-A Litematica file with an example map area can be found [here](StaircasedPrinter.litematic).
+A Litematica file with an example map area can be found [here](Schematics/StaircasedPrinter.litematic).
 
 You can design your own platform as long as it fulfills the following criteria:
 - The setup must be north of the map area.
@@ -133,43 +133,3 @@ After the entire map is mined, the process returns to **Step 2**.
 Demo video:
 
 [![Staircased Printer](https://img.youtube.com/vi/SLwqRpoV7jY/0.jpg)](https://www.youtube.com/watch?v=SLwqRpoV7jY)
-
----
-
-## Optional Features
-
-### Save and Load Configurations
-
-To save a configuration:
-1. Register blocks as usual.
-2. Press **Save Config** in the module settings.
-3. Select a file to overwrite or choose a new file name.
-It will be a JSON file.
-
-To load a configuration:
-1. Press **Load**.
-2. Select a config file.
-3. Start the print as usual.
-
----
-
-### Multi-User Printing
-
-The printer can coordinate multiple accounts to print on the same map area.
-
-- One bot acts as the **master**.
-- Other bots act as **slaves**.
-- Communication occurs via direct messages.
-
-#### Setup
-
-1. Adjust the prefix and suffix in the settings.
-Most servers use third-party DM plugins with varying syntax.  
-Configure the Multi-User settings accordingly.
-Incoming DMs should follow this format: `(prefix)(sender's name)(suffix)(message)`
-2. Enable the module and load the configuration on **every** bot.
-3. Move all slave bots within render distance of the master.
-4. Press **Register** using the master account.
-An **Accept** message should appear for each slave.
-5. Start the print as usual.
-
