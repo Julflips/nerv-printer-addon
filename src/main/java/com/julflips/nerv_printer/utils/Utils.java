@@ -21,6 +21,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Pair;
+import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
@@ -168,6 +169,12 @@ public final class Utils {
     public static void setSneakPressed(boolean pressed) {
         mc.options.sneakKey.setPressed(pressed);
         Input.setKeyState(mc.options.sneakKey, pressed);
+    }
+
+    public static boolean sendingInput() {
+        PlayerInput input = mc.player.input.playerInput;
+        return input.forward() || input.backward() || input.left() || input.right()
+            || input.jump() || input.sneak() || input.sprint();
     }
 
     public static int findHighestFreeSlot(InventoryS2CPacket packet) {

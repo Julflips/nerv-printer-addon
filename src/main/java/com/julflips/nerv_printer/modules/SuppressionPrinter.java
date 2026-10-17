@@ -135,6 +135,13 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         .build()
     );
 
+    private final Setting<Boolean> rotateMine = sgGeneral.add(new BoolSetting.Builder()
+        .name("rotate-mine")
+        .description("Rotate when mining a block.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> supportBlocks = sgGeneral.add(new BoolSetting.Builder()
         .name("support-blocks")
         .description("Place blocks with support. Can be disabled if there is a 2 block heigh ceiling or airplace allowed.")
@@ -254,15 +261,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     // Advanced
 
-    private final Setting<Integer> preRestockDelay = sgAdvanced.add(new IntSetting.Builder()
-        .name("pre-restock-delay")
-        .description("How many ticks to wait to take items after opening the chest.")
-        .defaultValue(10)
-        .min(1)
-        .sliderRange(1, 40)
-        .build()
-    );
-
     private final Setting<Integer> invActionDelay = sgAdvanced.add(new IntSetting.Builder()
         .name("inventory-action-delay")
         .description("How many ticks to wait between each inventory action (moving a stack).")
@@ -272,12 +270,30 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         .build()
     );
 
+    public final Setting<Boolean> inventoryMove = sgAdvanced.add(new BoolSetting.Builder()
+        .name("inventory-move")
+        .description("Allow inventory action while moving by ending fake player input.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Integer> preRestockDelay = sgAdvanced.add(new IntSetting.Builder()
+        .name("pre-restock-delay")
+        .description("How many ticks to wait to take items after opening the chest.")
+        .defaultValue(10)
+        .min(0)
+        .sliderRange(0, 40)
+        .visible(() -> !inventoryMove.get())
+        .build()
+    );
+
     private final Setting<Integer> postRestockDelay = sgAdvanced.add(new IntSetting.Builder()
         .name("post-restock-delay")
         .description("How many ticks to wait after restocking.")
         .defaultValue(10)
-        .min(1)
-        .sliderRange(1, 40)
+        .min(0)
+        .sliderRange(0, 40)
+        .visible(() -> !inventoryMove.get())
         .build()
     );
 
@@ -287,6 +303,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         .defaultValue(5)
         .min(0)
         .sliderRange(0, 20)
+        .visible(() -> !inventoryMove.get())
         .build()
     );
 
@@ -296,6 +313,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         .defaultValue(5)
         .min(0)
         .sliderRange(0, 20)
+        .visible(() -> !inventoryMove.get())
         .build()
     );
 
@@ -724,7 +742,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             State.AwaitUsedToolChestResponse, State.AwaitUsedToolChestResponseDumpAll);
         if (allowedStates.contains(state)) {
             toBeHandledInvPacket = packet;
-            timeoutTicks = preRestockDelay.get();
+            timeoutTicks = getInvDelay(preRestockDelay);
         }
     }
 
@@ -778,14 +796,14 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     return;
                 }
                 interactTimeout = 0;
-                timeoutTicks = postRestockDelay.get();
+                timeoutTicks = getInvDelay(postRestockDelay);
                 Utils.getOneItem(mapSlot, false, availableSlots, availableHotBarSlots, packet);
                 Utils.getOneItem(paneSlot, true, availableSlots, availableHotBarSlots, packet);
                 state = State.Walking;
                 break;
             case AwaitCartographyResponse:
                 interactTimeout = 0;
-                timeoutTicks = postRestockDelay.get();
+                timeoutTicks = getInvDelay(postRestockDelay);
                 boolean searchingMap = true;
                 for (int slot : availableSlots) {
                     if (slot < 9) {  //Stupid slot correction
@@ -819,7 +837,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 break;
             case AwaitFinishedMapChestResponse:
                 interactTimeout = 0;
-                timeoutTicks = postRestockDelay.get();
+                timeoutTicks = getInvDelay(postRestockDelay);
                 for (int slot = packet.contents().size() - 36; slot < packet.contents().size(); slot++) {
                     ItemStack stack = packet.contents().get(slot);
                     if (stack.getItem() == Items.FILLED_MAP) {
@@ -929,10 +947,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         if (toBeSwappedSlot != -1) {
             swapIntoHotbar(toBeSwappedSlot);
             toBeSwappedSlot = -1;
-            if (postSwapDelay.get() != 0) {
-                timeoutTicks = postSwapDelay.get();
-                return;
-            }
+            timeoutTicks = getInvDelay(postSwapDelay);
+            if (timeoutTicks > 0) return;
         }
 
         // Restocking
@@ -992,8 +1008,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         && itemEntity.getOwner() == null
                         && itemEntity.getY() >= getActiveMapCorner().getY()
                         && itemEntity.getY() < getActiveMapCorner().getY() + 2
-                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 1.6f
-                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 2.6f
+                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 1.7f
+                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 2.7f
                         && itemEntity.getZ() <= lowerMapCorner.getZ() + 129
                         && itemEntity.getZ() >= lowerMapCorner.getZ() - 2
                         && itemEntity.getZ() * zModifier > (mc.player.getZ() + minZCollectionDistance.get()) * zModifier) {
@@ -1020,9 +1036,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 nextBlockPos = null;
                 state = State.Mining;
             } else {
-                BlockPos mapCorner = getActiveMapCorner();
-                Vec3d lookPos = new Vec3d(mc.player.getX(), mapCorner.toCenterPos().y + 0.5f, nextBlockPos.toCenterPos().z);
-                mc.player.setPitch((float) Rotations.getPitch(lookPos));
+                lookAtMiningPos();
                 BlockUtils.breakBlock(nextBlockPos, true);
 
                 if (Math.abs(nextBlockPos.toCenterPos().getZ() - mc.player.getZ()) <= minMiningRange.get()) {
@@ -1305,9 +1319,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         if (state.equals(State.Walking)) {
             tryPlacingBlock();
         } else {
-            BlockPos mapCorner = getActiveMapCorner();
-            Vec3d lookPos = new Vec3d(mc.player.getX(), mapCorner.toCenterPos().y + 0.5f, nextBlockPos.toCenterPos().z);
-            mc.player.setPitch((float) Rotations.getPitch(lookPos));
+            lookAtMiningPos();
             BlockState blockState = MapAreaCache.getCachedBlockState(nextBlockPos);
             ItemStack bestTool = ToolUtils.getBestTool(toolSet, blockState);
             int bestHotbarSlot = -1;
@@ -1504,7 +1516,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             restockList.remove(0);
             addClosestRestockCheckpoint();
         }
-        timeoutTicks = postRestockDelay.get();
+        timeoutTicks = getInvDelay(postRestockDelay);
         state = State.Walking;
     }
 
@@ -1554,8 +1566,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             if (foundMaterial.equals(material)) {
                 lastSwappedMaterial = material;
                 toBeSwappedSlot = slot;
-                Utils.setForwardPressed(false);
-                timeoutTicks = preSwapDelay.get();
+                timeoutTicks = getInvDelay(preSwapDelay);
+                if (timeoutTicks > 0) Utils.setForwardPressed(false);
                 return;
             }
         }
@@ -1612,7 +1624,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             int reversedX = flippedX ? lowerMapLayer.length - 2 - x + workingInterval.getLeft() : x;
             for (int z = 0; z < lowerMapLayer[0].length; z++) {
                 for (int lineBonus = 0; lineBonus < 2; lineBonus++) {
-                    int adjustedX = reversedX + lineBonus;
+                    int adjustedX = flippedX ? reversedX + 1 - lineBonus : reversedX + lineBonus;
                     if (!Utils.isInInterval(workingInterval, adjustedX)) break;
                     for (int y = lowerMapLayer[0][0].length-1; y >= 0; y--) {
                         int adjustedZ = flippedZ ? lowerMapLayer[0].length-1-z : z;
@@ -1627,6 +1639,15 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             flippedZ = !flippedZ;
         }
         return null;
+    }
+
+    private void lookAtMiningPos() {
+        if (!rotateMine.get()) return;
+        BlockPos mapCorner = getActiveMapCorner();
+        float evenModifier = (nextBlockPos.getX() - mapCorner.getX()) % 2 == 0 ? 0.9f : 0.1f;
+        Vec3d lookPos = new Vec3d(nextBlockPos.getX() + evenModifier, mapCorner.getY() + 1, nextBlockPos.getZ() + 0.5f);
+        mc.player.setPitch((float) Rotations.getPitch(lookPos));
+        mc.player.setYaw((float) Rotations.getYaw(lookPos));
     }
 
     // Path and Building Management
@@ -2071,6 +2092,10 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             if (mc.player.getInventory().getStack(slot).isEmpty()) return false;
         }
         return true;
+    }
+
+    private int getInvDelay(Setting<Integer> setting) {
+        return inventoryMove.get() ? 0 : setting.get();
     }
 
     // MapPrinter Interface for Slave Logic
