@@ -1247,7 +1247,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                             runsUntilDump = runsBetweenDumps.get();
                             int xOffset = SlaveSystem.isSlave ? 2 : -2;
                             checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("dumpBlocks", null)));
-                            checkpoints.add(new Pair(mc.player.getEntityPos().add(xOffset,0,0), new Pair("mineFinished", null)));
+                            checkpoints.add(new Pair(mc.player.getEntityPos().add(xOffset,0,-2), new Pair("mineFinished", null)));
                             return;
                         }
                     }
