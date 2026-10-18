@@ -924,7 +924,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                 state = State.Mining;
             } else {
                 mc.player.setPitch((float) Rotations.getPitch(miningPos));
-                BlockUtils.breakBlock(miningPos, true);
+                Utils.breakBlock(miningPos);
 
                 if (Math.abs(miningPos.getZ() - mc.player.getZ()) >= maxMiningRange.get()) {
                     state = State.AwaitBlockBreak;
@@ -1168,7 +1168,7 @@ public class StaircasedPrinter extends Module implements MapPrinter {
                     Item item = mc.player.getInventory().getStack(slot).getItem();
                     if (item.equals(bestTool.getItem())) {
                         InvUtils.swap(slot, false);
-                        BlockUtils.breakBlock(miningPos, true);
+                        Utils.breakBlock(miningPos);
                         state = State.Mining;
                         if (Math.abs(miningPos.getZ() - mc.player.getZ()) >= maxMiningRange.get()) {
                             state = State.AwaitBlockBreak;

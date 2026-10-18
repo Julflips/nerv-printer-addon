@@ -1037,7 +1037,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 state = State.Mining;
             } else {
                 lookAtMiningPos();
-                BlockUtils.breakBlock(nextBlockPos, true);
+                Utils.breakBlock(nextBlockPos);
 
                 if (Math.abs(nextBlockPos.toCenterPos().getZ() - mc.player.getZ()) <= minMiningRange.get()) {
                     state = State.AwaitBlockBreak;
@@ -1341,7 +1341,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 return;
             }
             InvUtils.swap(bestHotbarSlot, false);
-            BlockUtils.breakBlock(nextBlockPos, true);
+            Utils.breakBlock(nextBlockPos);
             state = State.Mining;
             if (Math.abs(nextBlockPos.toCenterPos().getZ() - mc.player.getZ()) <= minMiningRange.get()) {
                 state = State.AwaitBlockBreak;

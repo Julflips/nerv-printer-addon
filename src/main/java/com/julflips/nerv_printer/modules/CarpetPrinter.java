@@ -808,7 +808,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                 state = State.Walking;
             } else {
                 Rotations.rotate(Rotations.getYaw(miningPos), Rotations.getPitch(miningPos), 50);
-                BlockUtils.breakBlock(miningPos, true);
+                Utils.breakBlock(miningPos);
                 return;
             }
         }
@@ -948,7 +948,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
                     miningPos = checkpointAction.getRight();
                     Utils.setForwardPressed(false);
                     Rotations.rotate(Rotations.getYaw(miningPos), Rotations.getPitch(miningPos), 50);
-                    BlockUtils.breakBlock(miningPos, true);
+                    Utils.breakBlock(miningPos);
                     return;
             }
             if (checkpoints.isEmpty()) {

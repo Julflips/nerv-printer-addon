@@ -19,6 +19,7 @@ import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Pair;
 import net.minecraft.util.PlayerInput;
@@ -385,6 +386,14 @@ public final class Utils {
             }
         }
         return bestSide;
+    }
+
+    public static void breakBlock(BlockPos blockPos) {
+        if (mc.player == null || mc.interactionManager == null || mc.world == null) return;
+
+        Direction side = Utils.getInteractionSide(blockPos);
+        mc.interactionManager.updateBlockBreakingProgress(blockPos, side);
+        mc.player.swingHand(Hand.MAIN_HAND);
     }
 
     public static boolean isInInterval(Pair<Integer, Integer> interval, int number) {
