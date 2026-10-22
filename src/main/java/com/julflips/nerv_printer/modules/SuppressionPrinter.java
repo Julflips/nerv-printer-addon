@@ -290,7 +290,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     public final Setting<Boolean> inventoryMove = sgAdvanced.add(new BoolSetting.Builder()
         .name("inventory-move")
         .description("Allow inventory action while moving by ending fake player input.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 
