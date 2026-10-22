@@ -240,12 +240,29 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         .build()
     );
 
+    private final Setting<Boolean> dumpSouth = sgMining.add(new BoolSetting.Builder()
+        .name("dump-south")
+        .description("Always dump inventory on the south side when mining.")
+        .defaultValue(true)
+        .visible(() -> collectBlocks.get())
+        .build()
+    );
+
+    private final Setting<Boolean> dumpNorth = sgMining.add(new BoolSetting.Builder()
+        .name("dump-north")
+        .description("Always dump inventory on the north side too when mining.")
+        .defaultValue(true)
+        .visible(() -> collectBlocks.get() && dumpSouth.get())
+        .build()
+    );
+
     private final Setting<Integer> runsBetweenDumps = sgMining.add(new IntSetting.Builder()
         .name("runs-between-dumps")
         .description("How many times to mine a line back and forth before dumping.")
         .defaultValue(1)
         .min(1)
         .sliderRange(1, 4)
+        .visible(() -> collectBlocks.get() && !dumpSouth.get())
         .build()
     );
 
@@ -1239,19 +1256,28 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     lastReportedZ = -1;
                     break;
                 case "mineEnd":
-                    if (goal.z < lowerMapCorner.getZ() + lowerMapLayer.length/2
-                        && ((SlaveSystem.isSlave && workingInterval.getRight() != lowerMapLayer.length-1)
-                        || (!SlaveSystem.isSlave && workingInterval.getLeft() != 0))) {
+                    if (goal.z < lowerMapCorner.getZ() + lowerMapLayer.length/2) {
+                        // Bot at north side
                         runsUntilDump--;
-                        if (runsUntilDump <= 0) {
-                            runsUntilDump = runsBetweenDumps.get();
-                            int xOffset = SlaveSystem.isSlave ? 2 : -2;
-                            checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("dumpBlocks", null)));
-                            checkpoints.add(new Pair(mc.player.getEntityPos().add(xOffset,0,-2), new Pair("mineFinished", null)));
-                            return;
+                        if (((dumpSouth.get() && dumpNorth.get()) || (!dumpSouth.get() && runsUntilDump <= 0))
+                            && ((SlaveSystem.isSlave && workingInterval.getRight() != lowerMapLayer.length-1)
+                            || (!SlaveSystem.isSlave && workingInterval.getLeft() != 0))) {
+                            if (runsUntilDump <= 0) {
+                                runsUntilDump = runsBetweenDumps.get();
+                                int xOffset = SlaveSystem.isSlave ? 2 : -2;
+                                checkpoints.add(new Pair(getBestDumpStation().getLeft(), new Pair("dumpBlocks", null)));
+                                checkpoints.add(new Pair(mc.player.getEntityPos().add(xOffset,0,-2), new Pair("mineFinished", null)));
+                                return;
+                            }
                         }
+                        finishMineLine();
+                    } else if (dumpSouth.get()) {
+                        // Bot at south side
+                        mc.player.setYaw(0);
+                        mc.player.setPitch(0);
+                        state = State.DumpingBlocks;
+                        checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("mineFinished", null)));
                     }
-                    finishMineLine();
                     return;
                 case "mineFinished":
                     finishMineLine();
@@ -2126,10 +2152,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         return activationReset.get();
     }
 
-    public void skipBuilding() {
-        info("ToDo");
-        startBuilding();
-    }
+    public void skipBuilding() {}
 
     public void slaveFinished(String slave) {
         if (switchedToMiningSlaves.contains(slave)) return;
@@ -2149,6 +2172,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             if (!prepareNextMapFile()) return;
             state = State.Walking;
             nextBlockPos = null;
+            runsUntilDump = runsBetweenDumps.get();
             if (Utils.hasTool(availableSlots)) {
                 checkpoints.add(new Pair(usedToolChest.getRight(), new Pair("usedToolChest", null)));
                 checkpoints.add(new Pair(getBestDumpStation(usedToolChest.getRight()).getLeft(), new Pair("dump", null)));
