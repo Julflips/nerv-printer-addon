@@ -133,5 +133,8 @@ A collection of maps printed with this addon:
   <img src="Documentation/Gallery/TheFirstDate.png" alt="The First Date" height="200">
   <img src="Documentation/Gallery/Toradora!.png" alt="Toradora!" height="200">
   <img src="Documentation/Gallery/BigOwO.png" height="200">
+  <img src="Documentation/Gallery/TheVisionOfTheValleyOfTheDryBones.png" height="200">
+  <img src="Documentation/Gallery/BlackHole.png" height="200">
+  <img src="Documentation/Gallery/DestructionOfLeviathan.png" height="200">
 
 </div>
