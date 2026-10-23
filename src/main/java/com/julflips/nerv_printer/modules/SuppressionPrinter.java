@@ -555,7 +555,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     @Override
     public void onActivate() {
         lastTickTime = System.currentTimeMillis();
-        if (!activationReset.get() && checkpoints != null) {
+        if (!activationReset.get() && checkpoints != null && LocalTCPTransport.isRunning()) {
             return;
         }
         materialDict = new HashMap<>();
@@ -1845,7 +1845,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 // Remove excess Slaves
                 ArrayList<String> toBeRemoved = new ArrayList<>();
                 for (int i = 5; i < SlaveSystem.slaves.size(); i++) {toBeRemoved.add(SlaveSystem.slaves.get(i));}
-                for (String slave : toBeRemoved) {SlaveSystem.removeSlave(slave);}
+                for (String slave : toBeRemoved) {SlaveSystem.removeSlave(slave, true);}
             }
 
             // Slave 1: Placing upper layer
@@ -2567,12 +2567,13 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             startedFiles.clear();
         };
 
-        WButton closeConnection = table.add(theme.button("Close Connection")).widget();
-        closeConnection.action = () -> {
-            SlaveSystem.closeConnection();
-            if (isActive()) toggle();
-        };
-        table.row();
+        if (!SlaveSystem.isSlave) {
+            WButton resetSlaveSystem = table.add(theme.button("Reset Slave System")).widget();
+            resetSlaveSystem.action = () -> {
+                SlaveSystem.closeConnection();
+            };
+            table.row();
+        }
 
         WTable slaveTable = new WTable();
         list.add(slaveTable);
