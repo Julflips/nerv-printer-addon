@@ -1266,14 +1266,15 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                                 return;
                             }
                         }
-                        finishMineLine();
                     } else if (dumpSouth.get()) {
                         // Bot at south side
                         mc.player.setYaw(0);
                         mc.player.setPitch(0);
                         state = State.DumpingBlocks;
                         checkpoints.add(new Pair(mc.player.getEntityPos(), new Pair("mineFinished", null)));
+                        return;
                     }
+                    finishMineLine();
                     return;
                 case "mineFinished":
                     finishMineLine();
