@@ -228,6 +228,16 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         .build()
     );
 
+    private final Setting<Double> collectionRange = sgMining.add(new DoubleSetting.Builder()
+        .name("collection-range")
+        .description(".")
+        .defaultValue(0.75f)
+        .min(0)
+        .sliderRange(0, 1.5f)
+        .visible(() -> collectBlocks.get())
+        .build()
+    );
+
     private final Setting<Boolean> collectAllDirections = sgMining.add(new BoolSetting.Builder()
         .name("collect-both-directions")
         .description("If set to false, only collect items when going south-to-north and ignore them otherwise. " +
@@ -1025,18 +1035,23 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         && itemEntity.getOwner() == null
                         && itemEntity.getY() >= getActiveMapCorner().getY()
                         && itemEntity.getY() < getActiveMapCorner().getY() + 2
-                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 1.6f
-                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 2.6f
+                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 1 + collectionRange.get()
+                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 2 - collectionRange.get()
                         && itemEntity.getZ() <= lowerMapCorner.getZ() + 129
                         && itemEntity.getZ() >= lowerMapCorner.getZ() - 2
                         && itemEntity.getZ() * zModifier > (mc.player.getZ() + minZCollectionDistance.get()) * zModifier) {
+
                         // Cap the collectionPos to avoid the player trying to walk into walls
-                        double clampedX;
+                        double minX, maxX;
                         if (SlaveSystem.isSlave) {
-                            clampedX = Math.clamp(itemEntity.getX(), lowerMapCorner.getX() + 0.4f, lowerMapCorner.getX() + workingInterval.getRight() + 0.6f);
+                            minX = lowerMapCorner.getX() + 0.4f;
+                            maxX = lowerMapCorner.getX() + workingInterval.getRight() + 0.6f;
                         } else {
-                            clampedX = Math.clamp(itemEntity.getX(), lowerMapCorner.getX() + workingInterval.getLeft() + 0.4f, lowerMapCorner.getX() + 127.6f);
+                            minX = lowerMapCorner.getX() + workingInterval.getLeft() + 0.4f;
+                            maxX = lowerMapCorner.getX() + 127.6f;
                         }
+                        double clampedX = Math.max(minX, Math.min(itemEntity.getX(), maxX));
+
                         Vec3d collectionPos = new Vec3d(
                             clampedX,
                             itemEntity.getY(),
