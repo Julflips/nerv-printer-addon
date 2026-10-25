@@ -23,18 +23,16 @@ public final class SlaveSystem {
     private static boolean sendToUpper = true;
 
     public static void setupSlaveSystem(MapPrinter module, String ip, int port) {
-        if (LocalTCPTransport.isRunning()) {
-            ChatUtils.warning("TCP Transport is already running! Press 'Reset Connection' to reset.");
-            return;
+        if (!LocalTCPTransport.isRunning()) {
+            isSlave = LocalTCPTransport.initialize(ip, port);
+            printerModule = module;
+            slaves.clear();
+            activeSlavesDict.clear();
+            finishedSlavesDict.clear();
+            slavesLayerDict.clear();
+            sendToUpper = true;
+            mapCompletionState.initializeLayers();
         }
-        printerModule = module;
-        slaves.clear();
-        activeSlavesDict.clear();
-        finishedSlavesDict.clear();
-        slavesLayerDict.clear();
-        isSlave = LocalTCPTransport.initialize(ip, port);
-        sendToUpper = true;
-        mapCompletionState.initializeLayers();
     }
 
     public static void setTcpAddress(String ip, int port) {
@@ -102,6 +100,15 @@ public final class SlaveSystem {
         if (printerModule != null) printerModule.skipBuilding();
     }
 
+    public static void removeSlave(String slave, boolean notifySlave) {
+        if (notifySlave) sendToSlave(slave, "remove");
+        if (slaves.contains(slave)) slaves.remove(slave);
+        if (activeSlavesDict.containsKey(slave)) activeSlavesDict.remove(slave);
+        if (finishedSlavesDict.containsKey(slave)) finishedSlavesDict.remove(slave);
+        if (slavesLayerDict.containsKey(slave)) slavesLayerDict.remove(slave);
+        generateIntervals(slaves);
+    }
+
     public static void closeConnection() {
         LocalTCPTransport.close();
         if (!isSlave) {
@@ -110,6 +117,7 @@ public final class SlaveSystem {
             finishedSlavesDict.clear();
             slavesLayerDict.clear();
         }
+        if (printerModule.isActive()) printerModule.toggle();
     }
 
     public static void generateIntervals(ArrayList<String> slaveList) {
@@ -134,15 +142,6 @@ public final class SlaveSystem {
         }
     }
 
-    public static void removeSlave(String slave) {
-        slaves.remove(slave);
-        activeSlavesDict.remove(slave);
-        finishedSlavesDict.remove(slave);
-        slavesLayerDict.remove(slave);
-        sendToAllSlaves("remove");
-        generateIntervals(slaves);
-    }
-
     public static void handleIncomingTcpMessage(String sender, String rawMessage) {
         // If no sender is specified, the message is from master
         if (rawMessage == null || rawMessage.isBlank()) return;
@@ -157,7 +156,7 @@ public final class SlaveSystem {
                 case "layer":
                     boolean upper = Boolean.parseBoolean(colonSplit[1]);
                     printerModule.setLayer(upper);
-                    ChatUtils.info("§a Move this bot to the §b" + (upper ? "upper": "lower") +" §alayer before starting");
+                    ChatUtils.info("§aMove this bot to the " + (upper ? "§4upper" : "§4lower") + " §alayer before starting");
                     break;
                 case "interval":
                     if (colonSplit.length >= 3) {
@@ -229,6 +228,9 @@ public final class SlaveSystem {
                     BlockPos relativeErrorPos = new BlockPos(Integer.parseInt(colonSplit[1]), 0, Integer.parseInt(colonSplit[2]));
                     printerModule.addError(relativeErrorPos);
                 }
+                break;
+            case "remove":
+                removeSlave(sender, false);
                 break;
             default:
                 ChatUtils.warning("Unknown command: '" + command + "'");

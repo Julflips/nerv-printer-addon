@@ -437,7 +437,7 @@ public class CarpetPrinter extends Module implements MapPrinter {
     @Override
     public void onActivate() {
         lastTickTime = System.currentTimeMillis();
-        if (!activationReset.get() && checkpoints != null) {
+        if (!activationReset.get() && checkpoints != null && LocalTCPTransport.isRunning()) {
             return;
         }
         materialDict = new HashMap<>();
@@ -1712,12 +1712,13 @@ public class CarpetPrinter extends Module implements MapPrinter {
         };
         table.row();
 
-        WButton closeConnection = table.add(theme.button("Close Connection")).widget();
-        closeConnection.action = () -> {
-            SlaveSystem.closeConnection();
-            if (isActive()) toggle();
-        };
-        table.row();
+        if (!SlaveSystem.isSlave) {
+            WButton resetSlaveSystem = table.add(theme.button("Reset Slave System")).widget();
+            resetSlaveSystem.action = () -> {
+                SlaveSystem.closeConnection();
+            };
+            table.row();
+        }
 
         WTable slaveTable = new WTable();
         list.add(slaveTable);

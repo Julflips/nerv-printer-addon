@@ -72,7 +72,7 @@ public final class SlaveTableController {
 
             WMinus remove = table.add(theme.confirmedMinus()).widget();
             remove.action = () -> {
-                SlaveSystem.removeSlave(slave);
+                SlaveSystem.removeSlave(slave, true);
                 rebuild();
             };
 

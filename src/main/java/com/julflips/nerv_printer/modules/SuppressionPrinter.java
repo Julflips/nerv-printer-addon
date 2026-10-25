@@ -15,10 +15,7 @@ import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.utils.player.FindItemResult;
-import meteordevelopment.meteorclient.utils.player.InvUtils;
-import meteordevelopment.meteorclient.utils.player.PlayerUtils;
-import meteordevelopment.meteorclient.utils.player.Rotations;
+import meteordevelopment.meteorclient.utils.player.*;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
@@ -555,7 +552,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     @Override
     public void onActivate() {
         lastTickTime = System.currentTimeMillis();
-        if (!activationReset.get() && checkpoints != null) {
+        if (!activationReset.get() && checkpoints != null && LocalTCPTransport.isRunning()) {
             return;
         }
         materialDict = new HashMap<>();
@@ -1789,7 +1786,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             for (Integer suppressionCheckpoint : suppressionCheckpoints) {
                 Vec3d entry = lowerMapCorner.toCenterPos().add(xOffset + 1.4f,-3.5, suppressionCheckpoint);
                 checkpoints.add(new Pair(entry, new Pair("startSneak", null)));
-                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset,-3.5, suppressionCheckpoint), new Pair("stopSneak", null)));
+                checkpoints.add(new Pair(lowerMapCorner.toCenterPos().add(xOffset + 0.1f,-3.5, suppressionCheckpoint), new Pair("stopSneak", null)));
                 checkpoints.add(new Pair(entry, new Pair("sprint", null)));
             }
             // Go to next suppression line
@@ -1845,7 +1842,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 // Remove excess Slaves
                 ArrayList<String> toBeRemoved = new ArrayList<>();
                 for (int i = 5; i < SlaveSystem.slaves.size(); i++) {toBeRemoved.add(SlaveSystem.slaves.get(i));}
-                for (String slave : toBeRemoved) {SlaveSystem.removeSlave(slave);}
+                for (String slave : toBeRemoved) {SlaveSystem.removeSlave(slave, true);}
             }
 
             // Slave 1: Placing upper layer
@@ -2433,13 +2430,9 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     case Up -> {
                         switch (nextDiff) {
                             case Up -> {
-                                lowerMapLayer[x][z][1] = fillerBlock.get();
-                                upperMapLayer[x][z][0] = nextMaterial;
-                                upperMapLayer[x][z-1][1] = fillerBlock.get();
-                                if (supportBlocks.get()) {
-                                    lowerMapLayer[x][z][0] = fillerBlock.get();
-                                    upperMapLayer[x][z-1][0] = fillerBlock.get();
-                                }
+                                lowerMapLayer[x][z][1] = nextMaterial;
+                                upperMapLayer[x][z-1][0] = fillerBlock.get();
+                                if (supportBlocks.get()) lowerMapLayer[x][z][0] = fillerBlock.get();
                             }
                             case Even -> {
                                 lowerMapLayer[x][z][1] = fillerBlock.get();
@@ -2456,10 +2449,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     case Even -> {
                         switch (nextDiff) {
                             case Up -> {
-                                lowerMapLayer[x][z][0] = fillerBlock.get();
-                                upperMapLayer[x][z][0] = nextMaterial;
-                                upperMapLayer[x][z-1][1] = fillerBlock.get();
-                                if (supportBlocks.get()) upperMapLayer[x][z-1][0] = fillerBlock.get();
+                                lowerMapLayer[x][z][0] = nextMaterial;
+                                upperMapLayer[x][z-1][0] = fillerBlock.get();
                             }
                             case Even -> {
                                 lowerMapLayer[x][z][0] = nextMaterial;
@@ -2537,42 +2528,39 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         };
         table.row();
 
-        WButton clearMapArea = table.add(theme.button("Clear Map Area & Start")).widget();
-        clearMapArea.action = () -> {
-            if (SlaveSystem.isSlave) {
-                warning("Only the master account can do initiate the clear.");
-                return;
-            }
-            if (SlaveSystem.slaves.isEmpty()) {
-                warning("Need to register at least 1 slave before clearing.");
-                return;
-            }
+        if (!SlaveSystem.isSlave) {
+            WButton clearMapArea = table.add(theme.button("Clear Map Area & Start")).padRight(20f).widget();
+            clearMapArea.action = () -> {
+                if (SlaveSystem.slaves.isEmpty()) {
+                    warning("Need to register at least 1 slave before clearing.");
+                    return;
+                }
 
-            lowerMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 63).boxed().toList());
-            upperMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 63).boxed().toList());
+                lowerMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 63).boxed().toList());
+                upperMiningCommand = new ArrayList<>(IntStream.rangeClosed(0, 63).boxed().toList());
 
-            // Prepare slaves for mining
-            for (int i = SlaveSystem.slaves.size() - 1; i >= Math.max(0, SlaveSystem.slaves.size()-2); i--) {
-                String slave = SlaveSystem.slaves.get(i);
-                SlaveSystem.sendToSlave(slave, "interval:" + -1 + ":" + -1);
-                SlaveSystem.sendToSlave(slave, "mine:" + -1);
-                SlaveSystem.finishedSlavesDict.put(slave, false);
-                SlaveSystem.activeSlavesDict.put(slave, true);
-            }
-            // Master slave helps mining
-            setInterval(new Pair<>(127, 127));
-            mineLine(-1);
-            // Prevent first mapFile from being moved
-            mapFile = null;
-            startedFiles.clear();
-        };
+                // Prepare slaves for mining
+                for (int i = SlaveSystem.slaves.size() - 1; i >= Math.max(0, SlaveSystem.slaves.size()-2); i--) {
+                    String slave = SlaveSystem.slaves.get(i);
+                    SlaveSystem.sendToSlave(slave, "interval:" + -1 + ":" + -1);
+                    SlaveSystem.sendToSlave(slave, "mine:" + -1);
+                    SlaveSystem.finishedSlavesDict.put(slave, false);
+                    SlaveSystem.activeSlavesDict.put(slave, true);
+                }
+                // Master slave helps mining
+                setInterval(new Pair<>(127, 127));
+                mineLine(-1);
+                // Prevent first mapFile from being moved
+                mapFile = null;
+                startedFiles.clear();
+            };
 
-        WButton closeConnection = table.add(theme.button("Close Connection")).widget();
-        closeConnection.action = () -> {
-            SlaveSystem.closeConnection();
-            if (isActive()) toggle();
-        };
-        table.row();
+            WButton resetSlaveSystem = table.add(theme.button("Reset Slave System")).widget();
+            resetSlaveSystem.action = () -> {
+                SlaveSystem.closeConnection();
+            };
+            table.row();
+        }
 
         WTable slaveTable = new WTable();
         list.add(slaveTable);
