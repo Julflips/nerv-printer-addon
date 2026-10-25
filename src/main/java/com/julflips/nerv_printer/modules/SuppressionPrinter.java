@@ -631,7 +631,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         if (state == State.SelectingDumpStation && event.packet instanceof PlayerActionC2SPacket packet
             && packet.getAction() == PlayerActionC2SPacket.Action.DROP_ITEM) {
             dumpStations.add(new Pair<>(mc.player.getEntityPos(), new Pair<>(mc.player.getYaw(), mc.player.getPitch())));
-            info("§aDump Station selected. You can register more or continue with the §bCartography Table.");
+            info("§aDump Station selected. You can register more or register (interact with) the §bCartography Table.");
             return;
         }
         if (!(event.packet instanceof PlayerInteractBlockC2SPacket packet) || state == null) return;
@@ -656,13 +656,16 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     upperMapCorner.getZ() == lowerMapCorner.getZ() &&
                     upperMapCorner.getY() > lowerMapCorner.getY()) {
                     state = State.SelectingDumpStation;
-                    info("§aUpper Map Area selected. Throw an item into each §bDump Station. " +
-                        "§aInteract with the §bCartography Table §aafter you selected all.");
+                    info("§aUpper Map Area selected. Throw an item into each §bDump Station.");
                 }
                 return;
             case SelectingDumpStation:
                 BlockPos blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock().equals(Blocks.CARTOGRAPHY_TABLE)) {
+                    if (dumpStations.isEmpty()) {
+                        warning("You need to register at least one Dump Station before continuing with the Cartography Table.");
+                        return;
+                    }
                     cartographyTable = new Pair<>(blockPos, mc.player.getEntityPos());
                     info("§aCartography Table selected. Select the §bFinished Map Chest.");
                     state = State.SelectingFinishedMapChest;
@@ -672,7 +675,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 blockPos = packet.getBlockHitResult().getBlockPos();
                 if (MapAreaCache.getCachedBlockState(blockPos).getBlock() instanceof AbstractChestBlock) {
                     finishedMapChest = new Pair<>(blockPos, mc.player.getEntityPos());
-                    info("§aFinished Map Chest selected. Select all §bUsed Tool Chest.");
+                    info("§aFinished Map Chest selected. Select the §bUsed Tool Chest.");
                     state = State.SelectingUsedToolChest;
                 }
                 break;
