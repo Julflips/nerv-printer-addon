@@ -79,7 +79,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     private final Setting<Double> interactionRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("interaction-range")
         .description("The maximum range you can place blocks around yourself.")
-        .defaultValue(4)
+        .defaultValue(3.5)
         .min(1)
         .sliderRange(1, 5)
         .build()
@@ -128,14 +128,14 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     private final Setting<Boolean> rotatePlace = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate-place")
         .description("Rotate when placing a block.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> rotateMine = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate-mine")
         .description("Rotate when mining a block.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
@@ -187,7 +187,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     private final Setting<Double> minMiningRange = sgMining.add(new DoubleSetting.Builder()
         .name("min-mining-range")
         .description("The minimum distance to keep to blocks when mining.")
-        .defaultValue(3)
+        .defaultValue(3.5)
         .min(0.5)
         .sliderRange(0.5, 3.5)
         .build()
@@ -343,7 +343,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     private final Setting<Integer> mapLoadTimeout = sgAdvanced.add(new IntSetting.Builder()
         .name("map-load-timeout")
         .description("How many ticks to wait to update the map in hand.")
-        .defaultValue(20)
+        .defaultValue(30)
         .min(0)
         .sliderRange(0, 40)
         .build()
@@ -546,7 +546,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     Block[][][] upperMapLayer;
 
     public SuppressionPrinter() {
-        super(Addon.CATEGORY, "suppression-printer", "Uses inplace suppression to build fullblock staircased maps.");
+        super(Addon.CATEGORY, "suppression-printer", "Uses 2-layer suppression to build fullblock staircased maps.");
     }
 
     @Override
@@ -1204,7 +1204,6 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                     break;
                 case "stopSneak":
                     Utils.setForwardPressed(false);
-                    Utils.setSneakPressed(false);
                     timeoutTicks = mapLoadTimeout.get();
                     awaitSuppressionZ =  (int) Math.floor(goal.z) - lowerMapCorner.getZ();
                     int startZ = Math.max(0, awaitSuppressionZ-15);
@@ -1317,6 +1316,11 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         mc.player.setYaw((float) Rotations.getYaw(new Vec3d(goal.x, goal.y, lookZ)));
 
         String nextAction = checkpoints.get(0).getRight().getLeft();
+
+        // Stop sneaking after stopSneak
+        if (nextAction != "stopSneak" && mc.player.isSneaking()) {
+            Utils.setSneakPressed(false);
+        }
 
         // Set sprint mode
         final List<String> noSprintActions = Arrays.asList("lineBegin", "lineEnd", "mineBegin", "mineEnd");
