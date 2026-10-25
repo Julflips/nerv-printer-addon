@@ -1022,8 +1022,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         && itemEntity.getOwner() == null
                         && itemEntity.getY() >= getActiveMapCorner().getY()
                         && itemEntity.getY() < getActiveMapCorner().getY() + 2
-                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 1.7f
-                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 2.7f
+                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 1.6f
+                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 2.6f
                         && itemEntity.getZ() <= lowerMapCorner.getZ() + 129
                         && itemEntity.getZ() >= lowerMapCorner.getZ() - 2
                         && itemEntity.getZ() * zModifier > (mc.player.getZ() + minZCollectionDistance.get()) * zModifier) {
