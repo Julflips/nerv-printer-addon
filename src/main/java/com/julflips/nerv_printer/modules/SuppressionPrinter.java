@@ -1029,33 +1029,35 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 int xModifier = SlaveSystem.isSlave ? 0 : 2;
                 for (Entity entity : mc.world.getEntities()) {
                     if ((zModifier == -1 && !collectAllDirections.get()) || isInventoryFull()) break;
+                    int cornerX = (int) Math.floor(getActiveMapCorner().toCenterPos().getX() - 0.5f);
+                    int cornerZ = (int) Math.floor(getActiveMapCorner().toCenterPos().getZ() - 0.5f);
                     if (entity instanceof ItemEntity itemEntity
                         && itemEntity.groundCollision
                         && !itemEntity.cannotPickup()
                         && itemEntity.getOwner() == null
                         && itemEntity.getY() >= getActiveMapCorner().getY()
                         && itemEntity.getY() < getActiveMapCorner().getY() + 2
-                        && itemEntity.getX() < lowerMapCorner.getX() + workingInterval.getRight() + xModifier + 1 + collectionRange.get()
-                        && itemEntity.getX() > lowerMapCorner.getX() + workingInterval.getLeft() + xModifier - 2 - collectionRange.get()
-                        && itemEntity.getZ() <= lowerMapCorner.getZ() + 129
-                        && itemEntity.getZ() >= lowerMapCorner.getZ() - 2
+                        && itemEntity.getX() < cornerX + workingInterval.getRight() + xModifier + 1 + collectionRange.get()
+                        && itemEntity.getX() > cornerX + workingInterval.getLeft() + xModifier - 2 - collectionRange.get()
+                        && itemEntity.getZ() <= cornerZ + 129
+                        && itemEntity.getZ() >= cornerZ - 2
                         && itemEntity.getZ() * zModifier > (mc.player.getZ() + minZCollectionDistance.get()) * zModifier) {
 
                         // Cap the collectionPos to avoid the player trying to walk into walls
                         double minX, maxX;
                         if (SlaveSystem.isSlave) {
-                            minX = lowerMapCorner.getX() + 0.4f;
-                            maxX = lowerMapCorner.getX() + workingInterval.getRight() + 0.6f;
+                            minX = cornerX + 0.4f;
+                            maxX = cornerX + workingInterval.getRight() + 0.6f;
                         } else {
-                            minX = lowerMapCorner.getX() + workingInterval.getLeft() + 0.4f;
-                            maxX = lowerMapCorner.getX() + 127.6f;
+                            minX = cornerX + workingInterval.getLeft() + 0.4f;
+                            maxX = cornerX + 127.6f;
                         }
                         double clampedX = Math.max(minX, Math.min(itemEntity.getX(), maxX));
 
                         Vec3d collectionPos = new Vec3d(
                             clampedX,
                             itemEntity.getY(),
-                            Math.min(lowerMapCorner.getZ() + lowerMapLayer[0].length - 0.4f, itemEntity.getZ()));
+                            Math.min(cornerZ + lowerMapLayer[0].length - 0.4f, itemEntity.getZ()));
                         checkpoints.addFirst(new Pair<>(collectionPos, new Pair<>("sprint", null)));
                     }
                 }
