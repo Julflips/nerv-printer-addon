@@ -44,7 +44,7 @@ public final class LocalTCPTransport {
         return false;
     }
 
-     // Returns whether this instance has an active master or slave connection.
+    // Returns whether this instance has an active master or slave connection.
     public static boolean isRunning() {
         synchronized (SOCKET_LOCK) {
             if (masterSocket != null
@@ -175,6 +175,8 @@ public final class LocalTCPTransport {
                             ChatUtils.error(
                                 "TCP server socket failed: " + e.getMessage()
                             );
+                            // Keep accepting new clients if the handshake failed but server is alive
+                            continue;
                         }
                         break;
                     }
@@ -261,7 +263,11 @@ public final class LocalTCPTransport {
                     break;
                 }
 
-                SlaveSystem.handleIncomingTcpMessage(sender, line);
+                try {
+                    SlaveSystem.handleIncomingTcpMessage(sender, line);
+                } catch (Exception e) {
+                    ChatUtils.error("Error handling TCP message: " + e.getMessage());
+                }
             }
 
         } catch (IOException ignored) {
@@ -394,14 +400,6 @@ public final class LocalTCPTransport {
                 currentServer.close();
             } catch (IOException ignored) {
             }
-        }
-    }
-
-    private static boolean isMasterInstance() {
-        synchronized (SOCKET_LOCK) {
-            return serverSocket != null
-                && !serverSocket.isClosed()
-                && (masterSocket == null || masterSocket.isClosed());
         }
     }
 }
