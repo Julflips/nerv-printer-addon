@@ -79,12 +79,6 @@ The target layer will be mentioned in chat on start-up.
 Move the bot to the layer before the print is started on the master account.
 You can change the schematic however you like, however, the lower and upper layer bots share the material chests so they need to be accessible from both layers.
 
-### Fullblock Printer (not supported anymore)
-The Fullblock Printer builds flat & staircased fullblock maps line by line.
-The bot mines all placed blocks again to recycle all used materials and feeds them into an item sorter.
-This module **will not work on servers where placing blocks in the air is disabled**.
-You can find the full documentation [here](Documentation/StaircasedGuide.md).
-
 ### Map Namer
 Semi-automatically names unnamed map items in inventory. Pauses on anvil break and insufficient xp and can be resumed.
 
