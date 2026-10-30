@@ -521,6 +521,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     boolean closeNextInvPacket;
     boolean workOnUpper;
     boolean masterMiningReady;
+    boolean reversedPattern;
     State state;
     State oldState;
     State debugPreviousState;
@@ -591,6 +592,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         closeNextInvPacket = false;
         workOnUpper = false;
         masterMiningReady = false;
+        reversedPattern = false;
         timeoutTicks = 0;
         interactTimeout = 0;
         toBeSwappedSlot = -1;
@@ -1554,7 +1556,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
     private void endRestocking() {
         if (restockList.get(0).getMiddle() > 0) {
-            warning("Not all necessary stacks restocked. Searching for another chest...");
+            if (debugPrints.get()) info("Not all necessary stacks restocked. Searching for another chest...");
             //Search for the next best chest
             checkedChests.add(lastInteractedChest);
             Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(getMaterialFromPos(lastInteractedChest));
@@ -1628,6 +1630,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
             // If player walks north and has built more than 50% continue placing south-to-north
             checkpoints.addFirst(new Pair(mc.player.getEntityPos(), new Pair("walkRestock", null)));
             checkpoints.addFirst(new Pair(pathCheckpoint, new Pair("walkRestock", null)));
+            reversedPattern = true;
         } else {
             // Else just start the line again north-to-south
             checkpoints.clear();
@@ -2028,20 +2031,36 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     private HashMap<Item, Integer> getRequiredItems() {
         //Calculate the next items to restock
         HashMap<Item, Integer> requiredItems = new HashMap<>();
-        forEachMapBlock((x, z, y, blockState, block) -> {
-            if (blockState.isAir() && getActiveMapLayer()[x][z][y] != null) {
-                // ChatUtils.info("Add material for: " + mapCorner.add(x, y, z).toShortString());
-                Item material = block.asItem();
-                if (!requiredItems.containsKey(material)) requiredItems.put(material, 0);
-                requiredItems.put(material, requiredItems.get(material) + 1);
-                // Check if the item fits into inventory. If not, undo the last increment and return
-                if (Utils.stacksRequired(requiredItems.values()) > availableSlots.size()) {
-                    requiredItems.put(material, requiredItems.get(material) - 1);
-                    return false;
+
+        for (int x = workingInterval.getLeft(); x <= workingInterval.getRight(); x += linesPerRun.get()) {
+            boolean flippedZ = reversedPattern;
+            reversedPattern = false;
+            for (int z = 0; z < lowerMapLayer[0].length; z++) {
+                int adjustedZ = flippedZ ? lowerMapLayer[0].length - 1 - z : z;
+
+                for (int lineBonus = 0; lineBonus < linesPerRun.get(); lineBonus++) {
+                    int adjustedX = x + lineBonus;
+                    if (!Utils.isInInterval(new Pair<>(workingInterval.getLeft(), workingInterval.getRight()), adjustedX)) break;
+
+                    for (int y = 0; y < lowerMapLayer[adjustedX][adjustedZ].length; y++) {
+                        Block block = getActiveMapLayer()[adjustedX][adjustedZ][y];
+                        BlockPos pos = getActiveMapCorner().add(adjustedX, y, adjustedZ);
+                        BlockState state = MapAreaCache.getCachedBlockState(pos);
+                        if (state.isAir() && getActiveMapLayer()[x][z][y] != null) {
+                            // ChatUtils.info("Add material for: " + mapCorner.add(x, y, z).toShortString());
+                            Item material = block.asItem();
+                            if (!requiredItems.containsKey(material)) requiredItems.put(material, 0);
+                            requiredItems.put(material, requiredItems.get(material) + 1);
+                            // Check if the item fits into inventory. If not, undo the last increment and return
+                            if (Utils.stacksRequired(requiredItems.values()) > availableSlots.size()) {
+                                requiredItems.put(material, requiredItems.get(material) - 1);
+                                return requiredItems;
+                            }
+                        }
+                    }
                 }
             }
-            return true;
-        });
+        }
         return requiredItems;
     }
 
