@@ -123,7 +123,8 @@ public final class ConfigDeserializer {
             }
 
             data.mapCorner = jsonToBlockPos(root.getAsJsonObject("mapCorner"));
-            data.upperMapCorner = jsonToBlockPos(root.getAsJsonObject("upperMapCorner"));
+            obj = getObj(root, "upperMapCorner");
+            data.upperMapCorner = obj != null ? jsonToBlockPos(obj) : null;
 
             data.materialDict = new HashMap<>();
             if (root.has("materialDict")) {
