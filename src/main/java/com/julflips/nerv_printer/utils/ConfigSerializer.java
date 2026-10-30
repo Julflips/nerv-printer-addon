@@ -50,12 +50,12 @@ public final class ConfigSerializer {
         Pair<BlockPos, Vec3d> cartographyTable,
         Pair<BlockPos, Vec3d> finishedMapChest,
         ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests,
-        Pair<Vec3d, Pair<Float, Float>> dumpStation,
+        ArrayList<Pair<Vec3d, Pair<Float, Float>>> dumpStations,
         BlockPos mapCorner,
         HashMap<Item, ArrayList<Pair<BlockPos, Vec3d>>> materialDict
     ) throws IOException {
         writeToJson(file, type, reset, cartographyTable, finishedMapChest, null, null, mapMaterialChests,
-            new ArrayList<>(List.of(dumpStation)), mapCorner, null, materialDict, null);
+            dumpStations, mapCorner, null, materialDict, null);
     }
 
     // Staircased Printer
