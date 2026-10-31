@@ -31,7 +31,7 @@ public final class SlaveTableController {
 
         table.add(theme.label("Multi-User: "));
 
-        WButton start = table.add(theme.button("Start all")).widget();
+/*        WButton start = table.add(theme.button("Start all")).widget();
         start.action = () -> {
             SlaveSystem.startAllSlaves();
             rebuild();
@@ -41,7 +41,7 @@ public final class SlaveTableController {
         pause.action = () -> {
             SlaveSystem.pauseAllSlaves();
             rebuild();
-        };
+        };*/
 
         if (staircased) {
             WButton skipNextBuilding = table.add(theme.button("Skip next building")).widget();
