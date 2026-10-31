@@ -798,6 +798,15 @@ public class CarpetPrinter extends Module implements MapPrinter {
 
         // Restocking
         if (restockBacklogSlots.size() > 0) {
+            // Check if container was closed during restock
+            if (mc.currentScreen == null) {
+                if (debugPrints.get()) info("Container was closed while restocking. Trying again...");
+                restockBacklogSlots.clear();
+                state = State.Walking;
+                checkpoints.add(0, new Pair(getBestDumpStation().getLeft(), new Pair<>("dump", null)));
+                return;
+            }
+
             int slot = restockBacklogSlots.remove(0);
             mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot, 1, SlotActionType.QUICK_MOVE, mc.player);
             if (restockBacklogSlots.isEmpty()) {

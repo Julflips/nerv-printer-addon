@@ -532,7 +532,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
     ArrayList<Pair<BlockPos, Vec3d>> mapMaterialChests;
     ArrayList<Pair<Vec3d, Pair<Float, Float>>> dumpStations;                    // Pos, Yaw, Pitch
     BlockPos tempChestPos;
-    BlockPos lastInteractedChest;
+    BlockPos lastInteractedBlock;
     BlockPos nextBlockPos;
     Item lastSwappedMaterial;
     InventoryS2CPacket toBeHandledInvPacket;
@@ -580,7 +580,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         switchedToMiningSlaves = new ArrayList<>();
         lowerMapCorner = null;
         upperMapCorner = null;
-        lastInteractedChest = null;
+        lastInteractedBlock = null;
         nextBlockPos = null;
         cartographyTable = null;
         finishedMapChest = null;
@@ -961,7 +961,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                 if (state == State.AwaitCartographyResponse) {
                     interactWithBlock(cartographyTable.getLeft());
                 } else {
-                    interactWithBlock(lastInteractedChest);
+                    interactWithBlock(lastInteractedBlock);
                 }
             }
         }
@@ -982,6 +982,15 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
         // Restocking
         if (restockBacklogSlots.size() > 0) {
+            // Check if container was closed during restock
+            if (mc.currentScreen == null) {
+                if (debugPrints.get()) info("Container was closed while restocking. Trying again...");
+                restockBacklogSlots.clear();
+                state = State.Walking;
+                checkpoints.addFirst(new Pair(mc.player.getEntityPos(), new Pair("calculateRefill", null)));
+                return;
+            }
+
             int slot = restockBacklogSlots.remove(0);
             mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, slot, 1, SlotActionType.QUICK_MOVE, mc.player);
             if (restockBacklogSlots.isEmpty()) {
@@ -1558,8 +1567,8 @@ public class SuppressionPrinter extends Module implements MapPrinter {
         if (restockList.get(0).getMiddle() > 0) {
             if (debugPrints.get()) info("Not all necessary stacks restocked. Searching for another chest...");
             //Search for the next best chest
-            checkedChests.add(lastInteractedChest);
-            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(getMaterialFromPos(lastInteractedChest));
+            checkedChests.add(lastInteractedBlock);
+            Pair<BlockPos, Vec3d> bestRestockPos = getBestChest(getMaterialFromPos(lastInteractedBlock));
             checkpoints.addFirst(new Pair<>(bestRestockPos.getRight(), new Pair<>("refill", bestRestockPos.getLeft())));
         } else {
             checkedChests.clear();
@@ -1593,7 +1602,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
 
         //Set timeout for chest interaction
         interactTimeout = retryInteractTimer.get();
-        lastInteractedChest = chestPos;
+        lastInteractedBlock = chestPos;
     }
 
     private void tryPlacingBlock() {
@@ -2046,7 +2055,7 @@ public class SuppressionPrinter extends Module implements MapPrinter {
                         Block block = getActiveMapLayer()[adjustedX][adjustedZ][y];
                         BlockPos pos = getActiveMapCorner().add(adjustedX, y, adjustedZ);
                         BlockState state = MapAreaCache.getCachedBlockState(pos);
-                        if (state.isAir() && getActiveMapLayer()[x][z][y] != null) {
+                        if (state.isAir() && block != null) {
                             // ChatUtils.info("Add material for: " + mapCorner.add(x, y, z).toShortString());
                             Item material = block.asItem();
                             if (!requiredItems.containsKey(material)) requiredItems.put(material, 0);
